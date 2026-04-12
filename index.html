@@ -94,7 +94,7 @@
         <div class="global-title">🏫 宝贝课时总管家</div>
         <button class="btn-global-add" onclick="addNewClass()">➕ 新增一个班级</button>
         <div style="flex-grow: 1;"></div>
-        <span style="font-size: 12px; color: #aaa; margin-right: 10px;">内存瘦身清理完毕 | 自动保存中</span>
+        <span style="font-size: 12px; color: #aaa; margin-right: 10px;">自动保存已开启</span>
         <button class="btn-save-json" onclick="exportAllJSON()">💾 导出数据存档(.json)</button>
         <button class="btn-load-json" onclick="document.getElementById('jsonFileInput').click()">📂 导入数据恢复</button>
         <input type="file" id="jsonFileInput" accept=".json" onchange="importAllJSON(event)">
@@ -161,39 +161,40 @@
         // ------------------ 统一工具域 ------------------
         function genUniqueId(prefix) { return prefix + '_' + Date.now() + '_' + Math.floor(Math.random() * 10000); }
 
-        // === 💥核心修复区：内存瘦身清道夫💥 ===
+        // === 💥修复失忆症：第一眼一定要看最新版的 V8！💥 ===
         function loadInitialData() {
-            // 列出所有可能塞满浏览器的旧版本钥匙
-            const allLegacyVersions = [
-                'geminiClassData_v6', 'geminiClassData_v5_5', 'geminiClassData_v5_4', 
-                'geminiClassData_v5_3', 'geminiClassData_v5_2', 'geminiClassData_v5_1', 
-                'geminiClassData_v5', 'geminiClassData_v4'
+            // 1. 首选最新保险箱！
+            let currentData = localStorage.getItem('geminiClassData_v8');
+            if (currentData) {
+                try { return JSON.parse(currentData); } catch(e) {}
+            }
+
+            // 2. 如果新保险箱没有，再找所有历史版本继承
+            const legacyVersions = [
+                'geminiClassData_v7', 'geminiClassData_v6', 'geminiClassData_v5_5', 
+                'geminiClassData_v5_4', 'geminiClassData_v5_3', 'geminiClassData_v5_2', 
+                'geminiClassData_v5_1', 'geminiClassData_v5', 'geminiClassData_v4'
             ];
             
-            let bestData = null;
-
-            // 1. 从新到旧，只要找到一份能用的数据，马上记下来
-            for (let v of allLegacyVersions) {
+            for (let v of legacyVersions) {
                 let data = localStorage.getItem(v);
                 if (data) {
-                    try {
-                        bestData = JSON.parse(data);
-                        break; // 找到了就跑
-                    } catch(e) {}
+                    try { return JSON.parse(data); } catch(e) {}
                 }
             }
 
-            // 2. 【最重要的一步】无情粉碎所有旧钥匙，释放 5MB 的浏览器内存！！！
-            allLegacyVersions.forEach(v => {
-                localStorage.removeItem(v);
-            });
+            // 3. 全都没有才是新开局
+            return [{ id: genUniqueId('c'), name: "新班级", students: [], sessions: [], attendanceData: {} }];
+        }
 
-            // 如果连一份数据都没找到，那就建个空的
-            if (!bestData || !Array.isArray(bestData)) {
-                bestData = [{ id: genUniqueId('c'), name: "示例班级", students: [], sessions: [], attendanceData: {} }];
-            }
-
-            return bestData;
+        // === 清理历史垃圾内存，防止存不进去 ===
+        function clearLegacyMemory() {
+            const legacyVersions = [
+                'geminiClassData_v7', 'geminiClassData_v6', 'geminiClassData_v5_5', 
+                'geminiClassData_v5_4', 'geminiClassData_v5_3', 'geminiClassData_v5_2', 
+                'geminiClassData_v5_1', 'geminiClassData_v5', 'geminiClassData_v4'
+            ];
+            legacyVersions.forEach(v => localStorage.removeItem(v));
         }
 
         let classesData = loadInitialData();
@@ -220,15 +221,15 @@
             document.getElementById('newSessionDate').valueAsDate = new Date();
             document.getElementById('payDate').valueAsDate = new Date();
             healData(); 
+            clearLegacyMemory(); // 顺手倒个垃圾
             renderAllClasses();
-            // 3. 把抓取到的唯一一份好数据，存进全新的 V7 仓库
-            saveData(); 
+            saveData(); // 把继承来的数据死死锁进 V8 保险箱
         };
 
         function saveData() {
             healData(); 
-            // 只存这一份！杜绝内存泄漏！
-            localStorage.setItem('geminiClassData_v7', JSON.stringify(classesData));
+            // 存入最新的 V8 保险箱！
+            localStorage.setItem('geminiClassData_v8', JSON.stringify(classesData));
             renderAllClasses(); 
         }
 
@@ -389,13 +390,11 @@
                 const cls = getClass(currentOperateClassId);
                 if(cls) {
                     cls.sessions.push({ id: genUniqueId('s'), date: fmtDate, duration: duration });
-                    saveData(); // 这一次绝对能存进去了！
-                } else {
-                    alert("找不到这个班级了，请刷新页面重试！");
+                    saveData(); 
                 }
                 closeSessionModal();
             } catch (e) {
-                alert("抱歉！存储空间未成功释放，错误信息：" + e.message);
+                alert("报错了：" + e.message);
                 closeSessionModal();
             }
         }
@@ -547,13 +546,12 @@
                 try {
                     importedData = JSON.parse(content);
                 } catch (error) {
-                    console.log("检测到文件破损，正在触发智能急救...");
                     try {
                         let fixedContent = autoFixTruncatedJSON(content);
                         importedData = JSON.parse(fixedContent);
-                        alert("⚠️ 检测到您导入的备份文件尾部曾被截断，但系统已强行缝合抢救成功！");
+                        alert("⚠️ 系统强行缝合了您残缺的备份文件！");
                     } catch (err2) {
-                        alert("❌ 文件损坏太严重了！请找找更早的 .json 备份文件。");
+                        alert("❌ 文件损坏太严重了！请找找更早的备份。");
                         document.getElementById('jsonFileInput').value = ''; 
                         return;
                     }
@@ -561,10 +559,10 @@
 
                 if (importedData && Array.isArray(importedData)) {
                     classesData = importedData;
-                    saveData(); 
-                    alert("✅ 旧数据完美恢复并已加载！");
+                    saveData(); // 这里存入 V8
+                    alert("✅ 导入成功！以后刷新再也不会消失了！");
                 } else {
-                    alert("❌ 导入失败：文件内容不是排课数据。");
+                    alert("❌ 导入失败：文件内容不对。");
                 }
                 document.getElementById('jsonFileInput').value = ''; 
             };
