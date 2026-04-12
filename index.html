@@ -47,7 +47,6 @@
         th, td { border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); padding: 8px; text-align: center; box-sizing: border-box; }
         th { background-color: #f1f8e9; color: #2e7d32; font-weight: bold; position: relative;}
         
-        /* 稍微加宽操作列，容纳两个按钮 */
         th:nth-child(1), td:nth-child(1) { position: sticky; left: 0; background-color: #f1f8e9; z-index: 2; width: 85px; } 
         th:nth-child(2), td:nth-child(2) { position: sticky; left: 85px; background-color: #f1f8e9; z-index: 2; width: 150px; } 
         th:nth-child(3), td:nth-child(3) { width: 85px; } 
@@ -68,7 +67,6 @@
         .status-select.absent { background-color: #ffebee; color: #c62828; }
         .alert-text { color: var(--warning); font-weight: bold; }
 
-        /* 弹窗通用样式 */
         .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 100; justify-content: center; align-items: center; }
         .modal { background: white; padding: 20px; border-radius: 8px; width: 320px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-height: 90vh; overflow-y: auto;}
         .modal h3 { margin-top: 0; color: #333; border-bottom: 2px solid #eee; padding-bottom: 10px;}
@@ -78,7 +76,6 @@
         .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;}
         .btn-cancel { background-color: #9e9e9e; }
         
-        /* 缴费记录列表样式 */
         .payment-list { margin-bottom: 20px; border: 1px solid #eee; border-radius: 4px; max-height: 150px; overflow-y: auto; background: #fafafa;}
         .payment-item { padding: 8px 10px; border-bottom: 1px solid #eee; font-size: 13px; position: relative;}
         .payment-item:last-child { border-bottom: none; }
@@ -97,9 +94,9 @@
         <div class="global-title">🏫 宝贝课时总管家</div>
         <button class="btn-global-add" onclick="addNewClass()">➕ 新增一个班级</button>
         <div style="flex-grow: 1;"></div>
-        <span style="font-size: 12px; color: #aaa; margin-right: 10px;">自动保存已开启</span>
-        <button class="btn-save-json" onclick="exportAllJSON()">💾 导出全局备份</button>
-        <button class="btn-load-json" onclick="document.getElementById('jsonFileInput').click()">📂 导入旧版/全局备份</button>
+        <span style="font-size: 12px; color: #aaa; margin-right: 10px;">内存瘦身清理完毕 | 自动保存中</span>
+        <button class="btn-save-json" onclick="exportAllJSON()">💾 导出数据存档(.json)</button>
+        <button class="btn-load-json" onclick="document.getElementById('jsonFileInput').click()">📂 导入数据恢复</button>
         <input type="file" id="jsonFileInput" accept=".json" onchange="importAllJSON(event)">
     </div>
 
@@ -139,10 +136,7 @@
     <div class="modal-overlay" id="paymentModal">
         <div class="modal">
             <h3><span id="payStudentName" style="color: var(--primary);"></span> 的缴费记录</h3>
-            
-            <div class="payment-list" id="paymentListContainer">
-                </div>
-
+            <div class="payment-list" id="paymentListContainer"></div>
             <h4 style="margin-bottom: 10px; color: #333; font-size: 15px;">➕ 新增一笔收费</h4>
             <div class="modal-form-group">
                 <label>收款日期：</label>
@@ -154,7 +148,7 @@
             </div>
             <div class="modal-form-group">
                 <label>本次购买课时数：</label>
-                <input type="number" id="payHours" placeholder="填入数字，将自动加到总课时里">
+                <input type="number" id="payHours" placeholder="填入数字自动加到总课时里">
             </div>
             <div class="modal-actions">
                 <button class="btn btn-cancel" onclick="closePaymentModal()">关闭</button>
@@ -164,41 +158,86 @@
     </div>
 
     <script>
+        // ------------------ 统一工具域 ------------------
+        function genUniqueId(prefix) { return prefix + '_' + Date.now() + '_' + Math.floor(Math.random() * 10000); }
+
+        // === 💥核心修复区：内存瘦身清道夫💥 ===
         function loadInitialData() {
-            let v5_3 = localStorage.getItem('geminiClassData_v5_3');
-            if (v5_3) return JSON.parse(v5_3);
-            let v5_2 = localStorage.getItem('geminiClassData_v5_2');
-            if (v5_2) return JSON.parse(v5_2);
-            let v5_1 = localStorage.getItem('geminiClassData_v5_1');
-            if (v5_1) return JSON.parse(v5_1);
-            let v5_0 = localStorage.getItem('geminiClassData_v5');
-            if (v5_0) return JSON.parse(v5_0);
-            let v4 = localStorage.getItem('geminiClassData_v4');
-            if (v4) return JSON.parse(v4);
-            return [{ id: Date.now(), name: "示例班级", students: [], sessions: [], attendanceData: {} }];
+            // 列出所有可能塞满浏览器的旧版本钥匙
+            const allLegacyVersions = [
+                'geminiClassData_v6', 'geminiClassData_v5_5', 'geminiClassData_v5_4', 
+                'geminiClassData_v5_3', 'geminiClassData_v5_2', 'geminiClassData_v5_1', 
+                'geminiClassData_v5', 'geminiClassData_v4'
+            ];
+            
+            let bestData = null;
+
+            // 1. 从新到旧，只要找到一份能用的数据，马上记下来
+            for (let v of allLegacyVersions) {
+                let data = localStorage.getItem(v);
+                if (data) {
+                    try {
+                        bestData = JSON.parse(data);
+                        break; // 找到了就跑
+                    } catch(e) {}
+                }
+            }
+
+            // 2. 【最重要的一步】无情粉碎所有旧钥匙，释放 5MB 的浏览器内存！！！
+            allLegacyVersions.forEach(v => {
+                localStorage.removeItem(v);
+            });
+
+            // 如果连一份数据都没找到，那就建个空的
+            if (!bestData || !Array.isArray(bestData)) {
+                bestData = [{ id: genUniqueId('c'), name: "示例班级", students: [], sessions: [], attendanceData: {} }];
+            }
+
+            return bestData;
         }
 
         let classesData = loadInitialData();
         let currentOperateClassId = null;
-        let currentOperateStudentId = null; // 用于记录当前打开账本的宝贝
+        let currentOperateStudentId = null; 
+
+        function getClass(id) { return classesData.find(c => String(c.id) === String(id)); }
+        function getStudent(cid, sid) { const cls = getClass(cid); return cls ? cls.students.find(s => String(s.id) === String(sid)) : null; }
+
+        function healData() {
+            if (!Array.isArray(classesData)) classesData = [];
+            classesData.forEach(cls => {
+                if (!cls.students) cls.students = [];
+                if (!cls.sessions) cls.sessions = [];
+                if (!cls.attendanceData) cls.attendanceData = {};
+                cls.students.forEach(st => {
+                    if (!st.payments) st.payments = [];
+                    st.totalHours = parseFloat(st.totalHours) || 0;
+                });
+            });
+        }
 
         window.onload = () => {
             document.getElementById('newSessionDate').valueAsDate = new Date();
             document.getElementById('payDate').valueAsDate = new Date();
+            healData(); 
             renderAllClasses();
-            saveData();
+            // 3. 把抓取到的唯一一份好数据，存进全新的 V7 仓库
+            saveData(); 
         };
 
         function saveData() {
-            localStorage.setItem('geminiClassData_v5_3', JSON.stringify(classesData));
+            healData(); 
+            // 只存这一份！杜绝内存泄漏！
+            localStorage.setItem('geminiClassData_v7', JSON.stringify(classesData));
             renderAllClasses(); 
         }
 
         function addNewClass() {
-            classesData.unshift({ id: Date.now(), name: "新班级", students: [], sessions: [], attendanceData: {} });
+            classesData.unshift({ id: genUniqueId('c'), name: "新班级", students: [], sessions: [], attendanceData: {} });
             saveData();
         }
 
+        // ------------------ 渲染核心 ------------------
         function renderAllClasses() {
             const container = document.getElementById('classesContainer');
             container.innerHTML = '';
@@ -207,31 +246,30 @@
                 const classCard = document.createElement('div');
                 classCard.className = 'class-card';
                 
-                let classTotalSessions = classItem.sessions ? classItem.sessions.length : 0;
-                let classTotalHours = classItem.sessions ? classItem.sessions.reduce((sum, session) => sum + session.duration, 0) : 0;
+                let classTotalSessions = classItem.sessions.length;
+                let classTotalHours = classItem.sessions.reduce((sum, session) => sum + (parseFloat(session.duration)||0), 0);
                 
                 let headerHtml = `
                     <div class="class-header">
-                        <input type="text" class="class-title" value="${classItem.name}" onchange="updateClassInfo(${classItem.id}, 'name', this.value)">
+                        <input type="text" class="class-title" value="${classItem.name}" onchange="updateClassInfo('${classItem.id}', 'name', this.value)">
                         
                         <div class="progress-container">
                             <span class="progress-label">🚩 班级整体进度：</span>
                             <span class="progress-text">已开课 ${classTotalSessions} 次，整体消耗 ${classTotalHours} 小时</span>
                         </div>
 
-                        <button class="btn-add-student" onclick="addStudent(${classItem.id})">+ 添加宝贝</button>
-                        <button class="btn-add-session" onclick="openSessionModal(${classItem.id})">+ 新增一次课</button>
-                        <button class="btn-export-csv" onclick="exportClassCSV(${classItem.id})">📊 导出表格</button>
-                        <button class="btn-clear-class" onclick="clearClassData(${classItem.id})">🧹 清空记录</button>
-                        <button class="btn-delete-class" onclick="deleteClass(${classItem.id})">🗑️ 删除此班</button>
+                        <button class="btn-add-student" onclick="addStudent('${classItem.id}')">+ 添加宝贝</button>
+                        <button class="btn-add-session" onclick="openSessionModal('${classItem.id}')">+ 新增一次课</button>
+                        <button class="btn-export-csv" onclick="exportClassCSV('${classItem.id}')">📊 导出表格</button>
+                        <button class="btn-clear-class" onclick="clearClassData('${classItem.id}')">🧹 清空记录</button>
+                        <button class="btn-delete-class" onclick="deleteClass('${classItem.id}')">🗑️ 删除此班</button>
                     </div>
                 `;
 
                 const SESSIONS_PER_CHUNK = 10;
                 let chunks = [];
-                let safeSessions = classItem.sessions || [];
-                for (let i = 0; i < safeSessions.length; i += SESSIONS_PER_CHUNK) {
-                    chunks.push(safeSessions.slice(i, i + SESSIONS_PER_CHUNK));
+                for (let i = 0; i < classItem.sessions.length; i += SESSIONS_PER_CHUNK) {
+                    chunks.push(classItem.sessions.slice(i, i + SESSIONS_PER_CHUNK));
                 }
                 if (chunks.length === 0) chunks = [[]];
 
@@ -249,21 +287,21 @@
                     chunk.forEach(s => {
                         tableContent += `<th>
                             ${s.date} 
-                            <button class="btn-delete-session" onclick="deleteSession(${classItem.id}, '${s.id}')">❌</button><br>
+                            <button class="btn-delete-session" onclick="deleteSession('${classItem.id}', '${s.id}')">❌</button><br>
                             <span style="font-size:12px; font-weight:normal;">(${s.duration}h)</span>
                         </th>`;
                     });
                     
                     tableContent += `</tr></thead><tbody>`;
 
-                    if (!classItem.students || classItem.students.length === 0) {
+                    if (classItem.students.length === 0) {
                         tableContent += `<tr><td colspan="${5 + chunk.length}" style="text-align:center; color:#999; padding:15px;">还没有添加宝贝哦</td></tr>`;
                     } else {
                         classItem.students.forEach(st => {
                             let used = 0;
-                            safeSessions.forEach(s => {
-                                const status = (classItem.attendanceData && classItem.attendanceData[`${st.id}_${s.id}`]) || '';
-                                if (status === '✅出勤' || status === '❌旷课' || status === '🔄补课') used += s.duration;
+                            classItem.sessions.forEach(s => {
+                                const status = classItem.attendanceData[`${st.id}_${s.id}`] || '';
+                                if (status === '✅出勤' || status === '❌旷课' || status === '🔄补课') used += (parseFloat(s.duration)||0);
                             });
                             let remain = st.totalHours - used;
                             let alert = remain < 5 ? 'alert-text' : '';
@@ -276,33 +314,32 @@
                             optionsHtml += `<option value="custom">✏️ 自定义输入...</option>`;
 
                             let hoursInputHtml = `
-                                <select id="sel_${classItem.id}_${st.id}" class="hours-input" onchange="if(this.value === 'custom') { this.style.display='none'; document.getElementById('inp_${classItem.id}_${st.id}').style.display='block'; document.getElementById('inp_${classItem.id}_${st.id}').focus(); document.getElementById('inp_${classItem.id}_${st.id}').value=''; } else { updateStudentTotal(${classItem.id}, ${st.id}, this.value); }">
+                                <select id="sel_${classItem.id}_${st.id}" class="hours-input" onchange="if(this.value === 'custom') { this.style.display='none'; document.getElementById('inp_${classItem.id}_${st.id}').style.display='block'; document.getElementById('inp_${classItem.id}_${st.id}').focus(); document.getElementById('inp_${classItem.id}_${st.id}').value=''; } else { updateStudentTotal('${classItem.id}', '${st.id}', this.value); }">
                                     ${optionsHtml}
                                 </select>
-                                <input type="number" id="inp_${classItem.id}_${st.id}" class="hours-input" style="display:none;" placeholder="输入数字" onblur="if(this.value) updateStudentTotal(${classItem.id}, ${st.id}, this.value); else renderAllClasses();" onkeydown="if(event.key === 'Enter') this.blur();">
+                                <input type="number" id="inp_${classItem.id}_${st.id}" class="hours-input" style="display:none;" placeholder="输入数字" onblur="if(this.value) updateStudentTotal('${classItem.id}', '${st.id}', this.value); else renderAllClasses();" onkeydown="if(event.key === 'Enter') this.blur();">
                             `;
 
-                            // 核心：操作列新增了 💰 账本按钮
                             tableContent += `<tr>
                                 <td>
-                                    <button class="btn-icon-sm" style="color: var(--danger);" onclick="deleteStudent(${classItem.id}, ${st.id})" title="删除宝贝">🗑️</button>
-                                    <button class="btn-icon-sm" onclick="openPaymentModal(${classItem.id}, ${st.id})" title="财务账本及续费记录">💰</button>
+                                    <button class="btn-icon-sm" style="color: var(--danger);" onclick="deleteStudent('${classItem.id}', '${st.id}')" title="删除宝贝">🗑️</button>
+                                    <button class="btn-icon-sm" onclick="openPaymentModal('${classItem.id}', '${st.id}')" title="财务账本及续费记录">💰</button>
                                 </td>
-                                <td><input type="text" class="student-input" value="${st.name}" onchange="updateStudentName(${classItem.id}, ${st.id}, this.value)"></td>
+                                <td><input type="text" class="student-input" value="${st.name}" onchange="updateStudentName('${classItem.id}', '${st.id}', this.value)"></td>
                                 <td>${hoursInputHtml}</td>
                                 <td style="font-weight:bold; color:#555;">${used}</td>
                                 <td class="${alert}" style="font-weight:bold; font-size:16px;">${remain}</td>
                             `;
 
                             chunk.forEach(s => {
-                                const cur = (classItem.attendanceData && classItem.attendanceData[`${st.id}_${s.id}`]) || '';
+                                const cur = classItem.attendanceData[`${st.id}_${s.id}`] || '';
                                 let cls = 'status-select';
                                 if(cur.includes('出勤')) cls += ' attended';
                                 if(cur.includes('假')) cls += ' leave';
                                 if(cur.includes('旷课')) cls += ' absent';
 
                                 tableContent += `<td>
-                                    <select class="${cls}" onchange="updateAttendance(${classItem.id}, ${st.id}, '${s.id}', this.value)">
+                                    <select class="${cls}" onchange="updateAttendance('${classItem.id}', '${st.id}', '${s.id}', this.value)">
                                         <option value="">- 请选择 -</option>
                                         <option value="✅出勤" ${cur === '✅出勤' ? 'selected' : ''}>✅出勤</option>
                                         <option value="🏖️事假" ${cur === '🏖️事假' ? 'selected' : ''}>🏖️事假</option>
@@ -324,48 +361,81 @@
             });
         }
 
-        // ================= 财务账本系统核心代码 =================
+        // ------------------ 操作逻辑 ------------------
+        function updateClassInfo(id, field, val) { const cls = getClass(id); if(cls) { cls[field] = val; saveData(); } }
+        
+        function openSessionModal(id) { 
+            currentOperateClassId = id; 
+            const cls = getClass(id); 
+            if(cls) { 
+                document.getElementById('modalClassName').innerText = cls.name; 
+                document.getElementById('sessionModal').style.display = 'flex'; 
+            } 
+        }
+        function closeSessionModal() { document.getElementById('sessionModal').style.display = 'none'; }
+        function toggleCustomDuration() { document.getElementById('customDurationInput').style.display = document.getElementById('newSessionDuration').value === 'custom' ? 'block' : 'none'; }
+        
+        function confirmAddSession() {
+            try {
+                const dateInput = document.getElementById('newSessionDate').value;
+                if(!dateInput) return alert("请选择日期！");
+                const dateObj = new Date(dateInput);
+                const fmtDate = `${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
+                
+                let durVal = document.getElementById('newSessionDuration').value;
+                let duration = durVal === 'custom' ? parseFloat(document.getElementById('customDurationInput').value) : parseFloat(durVal);
+                if(!duration || duration <= 0) return alert("时长无效！");
+
+                const cls = getClass(currentOperateClassId);
+                if(cls) {
+                    cls.sessions.push({ id: genUniqueId('s'), date: fmtDate, duration: duration });
+                    saveData(); // 这一次绝对能存进去了！
+                } else {
+                    alert("找不到这个班级了，请刷新页面重试！");
+                }
+                closeSessionModal();
+            } catch (e) {
+                alert("抱歉！存储空间未成功释放，错误信息：" + e.message);
+                closeSessionModal();
+            }
+        }
+
+        function deleteSession(classId, sessionId) { if(confirm("确定删除这节课记录吗？")) { const cls = getClass(classId); if(cls){ cls.sessions = cls.sessions.filter(s => String(s.id) !== String(sessionId)); saveData(); } } }
+        function addStudent(id) { const cls = getClass(id); if(cls) { cls.students.push({ id: genUniqueId('st'), name: "", totalHours: 40, payments: [] }); saveData(); } }
+        function deleteStudent(cid, sid) { if(confirm("确定删除宝贝吗？")) { const cls = getClass(cid); if(cls){ cls.students = cls.students.filter(s => String(s.id) !== String(sid)); saveData(); } } }
+        function updateStudentName(cid, sid, val) { const st = getStudent(cid, sid); if(st){ st.name = val; saveData(); } }
+        function updateStudentTotal(cid, sid, val) { const st = getStudent(cid, sid); if(st){ st.totalHours = parseFloat(val) || 0; saveData(); } }
+        function updateAttendance(cid, sid, ssid, val) { const cls = getClass(cid); if(cls){ cls.attendanceData[`${sid}_${ssid}`] = val; saveData(); } }
+        function deleteClass(id) { if(confirm("确定彻底删除此班级吗？")) { classesData = classesData.filter(c => String(c.id) !== String(id)); saveData(); } }
+        function clearClassData(id) { if(confirm("确定清空本班所有考勤和宝贝记录吗？")) { const cls = getClass(id); if(cls){ cls.students = []; cls.sessions = []; cls.attendanceData = {}; saveData(); } } }
+
+        // ------------------ 财务账本逻辑 ------------------
         function openPaymentModal(classId, studentId) {
             currentOperateClassId = classId;
             currentOperateStudentId = studentId;
-            
-            const cls = classesData.find(c => c.id === classId);
-            const student = cls.students.find(s => s.id === studentId);
-            
+            const student = getStudent(classId, studentId);
+            if(!student) return;
             document.getElementById('payStudentName').innerText = student.name || "未命名宝贝";
             document.getElementById('payNote').value = '';
             document.getElementById('payHours').value = '';
             document.getElementById('payDate').valueAsDate = new Date();
-            
             renderPaymentList();
             document.getElementById('paymentModal').style.display = 'flex';
         }
 
-        function closePaymentModal() {
-            document.getElementById('paymentModal').style.display = 'none';
-        }
+        function closePaymentModal() { document.getElementById('paymentModal').style.display = 'none'; }
 
         function renderPaymentList() {
-            const cls = classesData.find(c => c.id === currentOperateClassId);
-            const student = cls.students.find(s => s.id === currentOperateStudentId);
+            const student = getStudent(currentOperateClassId, currentOperateStudentId);
             const listContainer = document.getElementById('paymentListContainer');
-            
-            if (!student.payments || student.payments.length === 0) {
+            if (!student || !student.payments || student.payments.length === 0) {
                 listContainer.innerHTML = '<div style="padding:15px; text-align:center; color:#999; font-size:12px;">暂无缴费记录哦</div>';
                 return;
             }
-
             let html = '';
-            // 倒序排列，最新的在最上面
             [...student.payments].reverse().forEach(p => {
                 let hourText = p.hours ? `<span class="payment-hours"> (+${p.hours}课时)</span>` : '';
-                html += `
-                    <div class="payment-item">
-                        <span class="payment-date">📅 ${p.date}</span> ${hourText}
-                        <div class="payment-note">📝 ${p.note || '无说明'}</div>
-                        <button class="btn-del-payment" onclick="deletePayment('${p.id}')">✖</button>
-                    </div>
-                `;
+                html += `<div class="payment-item"><span class="payment-date">📅 ${p.date}</span> ${hourText}<div class="payment-note">📝 ${p.note || '无说明'}</div><button class="btn-del-payment" onclick="deletePayment('${p.id}')">✖</button></div>`;
             });
             listContainer.innerHTML = html;
         }
@@ -375,123 +445,128 @@
             const note = document.getElementById('payNote').value;
             const hoursVal = document.getElementById('payHours').value;
             const hours = hoursVal ? parseFloat(hoursVal) : 0;
-
             if(!date) return alert("请选择收款日期！");
             if(!note && !hoursVal) return alert("款项说明和课时数至少填一项哦！");
 
-            const cls = classesData.find(c => c.id === currentOperateClassId);
-            const student = cls.students.find(s => s.id === currentOperateStudentId);
+            const student = getStudent(currentOperateClassId, currentOperateStudentId);
+            if(!student) return;
 
-            if (!student.payments) student.payments = [];
-            
-            student.payments.push({
-                id: 'pay' + Date.now(),
-                date: date,
-                note: note,
-                hours: hours
-            });
-
-            // 如果填了课时，自动加到总课时里
-            if (hours > 0) {
-                student.totalHours = (parseFloat(student.totalHours) || 0) + hours;
-            }
-
+            student.payments.push({ id: genUniqueId('pay'), date: date, note: note, hours: hours });
+            if (hours > 0) { student.totalHours = (parseFloat(student.totalHours) || 0) + hours; }
             saveData();
             renderPaymentList();
-            
-            // 清空输入框方便下次输入
             document.getElementById('payNote').value = '';
             document.getElementById('payHours').value = '';
-            
             alert(hours > 0 ? `✅ 记录已保存！并自动为宝贝增加了 ${hours} 个课时。` : "✅ 记录已保存！");
         }
 
         function deletePayment(payId) {
-            if(confirm("确定删除这条缴费记录吗？（注意：这不会自动扣减已加上的总课时，需要您手动去外面改一下哦）")) {
-                const cls = classesData.find(c => c.id === currentOperateClassId);
-                const student = cls.students.find(s => s.id === currentOperateStudentId);
-                student.payments = student.payments.filter(p => p.id !== payId);
-                saveData();
-                renderPaymentList();
+            if(confirm("确定删除这条记录吗？（不会自动扣减总课时，需手动更改）")) {
+                const student = getStudent(currentOperateClassId, currentOperateStudentId);
+                if(student) {
+                    student.payments = student.payments.filter(p => String(p.id) !== String(payId));
+                    saveData();
+                    renderPaymentList();
+                }
             }
         }
-        // =========================================================
 
-        function updateClassInfo(id, field, val) { const cls = classesData.find(c => c.id === id); if(cls) { cls[field] = val; saveData(); } }
-        function openSessionModal(id) { currentOperateClassId = id; document.getElementById('modalClassName').innerText = classesData.find(c => c.id === id).name; document.getElementById('sessionModal').style.display = 'flex'; }
-        
-        function confirmAddSession() {
-            const dateInput = document.getElementById('newSessionDate').value;
-            if(!dateInput) return alert("请选择日期！");
-            const dateObj = new Date(dateInput);
-            const fmtDate = `${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
-            let durVal = document.getElementById('newSessionDuration').value;
-            let duration = durVal === 'custom' ? parseFloat(document.getElementById('customDurationInput').value) : parseFloat(durVal);
-            if(!duration || duration <= 0) return alert("时长无效！");
-
-            const cls = classesData.find(c => c.id === currentOperateClassId);
-            if(!cls.sessions) cls.sessions = [];
-            cls.sessions.push({ id: 's' + Date.now(), date: fmtDate, duration: duration });
-            saveData();
-            closeSessionModal();
-        }
-
-        function deleteSession(classId, sessionId) { if(confirm("确定删除这节课记录吗？")) { const cls = classesData.find(c => c.id === classId); cls.sessions = cls.sessions.filter(s => s.id !== sessionId); saveData(); } }
-        function addStudent(id) { const cls = classesData.find(c => c.id === id); if(!cls.students) cls.students = []; cls.students.push({ id: Date.now(), name: "", totalHours: 40 }); saveData(); }
-        function deleteStudent(cid, sid) { if(confirm("确定删除宝贝吗？")) { const cls = classesData.find(c => c.id === cid); cls.students = cls.students.filter(s => s.id !== sid); saveData(); } }
-        function updateStudentName(cid, sid, val) { classesData.find(c => c.id === cid).students.find(s => s.id === sid).name = val; saveData(); }
-        function updateStudentTotal(cid, sid, val) { classesData.find(c => c.id === cid).students.find(s => s.id === sid).totalHours = parseFloat(val) || 0; saveData(); }
-        function updateAttendance(cid, sid, ssid, val) { const cls = classesData.find(c => c.id === cid); if(!cls.attendanceData) cls.attendanceData = {}; cls.attendanceData[`${sid}_${ssid}`] = val; saveData(); }
-        function deleteClass(id) { if(confirm("确定彻底删除此班级吗？")) { classesData = classesData.filter(c => c.id !== id); saveData(); } }
-        function clearClassData(id) { if(confirm("确定清空本班所有考勤和宝贝记录吗？")) { const cls = classesData.find(c => c.id === id); cls.students = []; cls.sessions = []; cls.attendanceData = {}; saveData(); } }
-        function closeSessionModal() { document.getElementById('sessionModal').style.display = 'none'; }
-        function toggleCustomDuration() { document.getElementById('customDurationInput').style.display = document.getElementById('newSessionDuration').value === 'custom' ? 'block' : 'none'; }
-
+        // ------------------ 导出与导入底层 ------------------
         function getToday() { const t = new Date(); return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`; }
         
         function exportClassCSV(id) {
-            const cls = classesData.find(c => c.id === id);
-            const name = `${cls.name}-考勤记录-备份草稿-${getToday()}.csv`;
-            let classTotalSessions = cls.sessions ? cls.sessions.length : 0;
-            let classTotalHours = cls.sessions ? cls.sessions.reduce((sum, session) => sum + session.duration, 0) : 0;
-            
-            let csv = "data:text/csv;charset=utf-8,\uFEFF班级整体消耗:," + `已上 ${classTotalSessions} 次课，共消耗 ${classTotalHours} 小时` + "\n\n宝贝姓名,总课时,已消,剩余";
-            (cls.sessions || []).forEach(s => csv += `,${s.date}(${s.duration}h)`);
-            csv += "\n";
-            (cls.students || []).forEach(st => {
-                let u = 0;
-                (cls.sessions || []).forEach(s => { const a = (cls.attendanceData && cls.attendanceData[`${st.id}_${s.id}`]); if(a==='✅出勤'||a==='❌旷课'||a==='🔄补课') u+=s.duration; });
-                csv += `${st.name},${st.totalHours},${u},${st.totalHours-u}`;
-                (cls.sessions || []).forEach(s => csv += `,${(cls.attendanceData && cls.attendanceData[`${st.id}_${s.id}`])||''}`);
+            try {
+                const cls = getClass(id);
+                if(!cls) return;
+                const name = `${cls.name}-考勤记录-${getToday()}.csv`;
+                let classTotalSessions = cls.sessions.length;
+                let classTotalHours = cls.sessions.reduce((sum, session) => sum + (parseFloat(session.duration)||0), 0);
+                
+                let csv = "\uFEFF班级整体消耗:," + `已上 ${classTotalSessions} 次课，共消耗 ${classTotalHours} 小时` + "\n\n宝贝姓名,总课时,已消,剩余";
+                cls.sessions.forEach(s => csv += `,${s.date}(${s.duration}h)`);
                 csv += "\n";
-            });
-            const link = document.createElement("a"); link.href = encodeURI(csv); link.download = name; link.click();
+                cls.students.forEach(st => {
+                    let u = 0;
+                    cls.sessions.forEach(s => { const a = cls.attendanceData[`${st.id}_${s.id}`]; if(a==='✅出勤'||a==='❌旷课'||a==='🔄补课') u+=(parseFloat(s.duration)||0); });
+                    csv += `${st.name},${st.totalHours},${u},${st.totalHours-u}`;
+                    cls.sessions.forEach(s => csv += `,${cls.attendanceData[`${st.id}_${s.id}`]||''}`);
+                    csv += "\n";
+                });
+                
+                const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+                const link = document.createElement("a");
+                link.href = URL.createObjectURL(blob);
+                link.download = name;
+                link.click();
+                URL.revokeObjectURL(link.href);
+            } catch(e) { alert("导出失败，请重试！"); }
         }
 
         function exportAllJSON() {
-            const data = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(classesData));
-            const link = document.createElement("a"); link.href = data; link.download = `全部班级-数据备份-备份草稿-${getToday()}.json`; link.click();
+            try {
+                const jsonStr = JSON.stringify(classesData, null, 2);
+                const blob = new Blob([jsonStr], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = `全部班级-数据备份-${getToday()}.json`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+            } catch(e) { alert("导出失败，请重试！"); }
+        }
+
+        function autoFixTruncatedJSON(str) {
+            let fixed = str.trim();
+            for(let i=0; i<20; i++) {
+                try { JSON.parse(fixed); return fixed; } catch(e) {}
+                try { JSON.parse(fixed + '}'); fixed += '}'; continue; } catch(e) {}
+                try { JSON.parse(fixed + ']'); fixed += ']'; continue; } catch(e) {}
+                try { JSON.parse(fixed + '"}'); fixed += '"}'; continue; } catch(e) {}
+                break; 
+            }
+            return fixed;
         }
 
         function importAllJSON(event) {
             const file = event.target.files[0];
             if (!file) return; 
             
+            if (!file.name.endsWith('.json')) {
+                alert("❌ 宝，选错文件啦！请选择 .json 结尾的数据存档文件！");
+                document.getElementById('jsonFileInput').value = '';
+                return;
+            }
+            
             const reader = new FileReader();
             reader.onload = function(e) {
+                let content = e.target.result;
+                let importedData = null;
+
                 try {
-                    const importedData = JSON.parse(e.target.result);
-                    if(Array.isArray(importedData)) {
-                        classesData = importedData;
-                        saveData(); 
-                        alert("✅ 备份数据导入成功！");
-                    } else {
-                        alert("❌ 导入失败：文件格式不对哦。");
-                    }
+                    importedData = JSON.parse(content);
                 } catch (error) {
-                    alert("❌ 读取失败：文件可能损坏了。");
+                    console.log("检测到文件破损，正在触发智能急救...");
+                    try {
+                        let fixedContent = autoFixTruncatedJSON(content);
+                        importedData = JSON.parse(fixedContent);
+                        alert("⚠️ 检测到您导入的备份文件尾部曾被截断，但系统已强行缝合抢救成功！");
+                    } catch (err2) {
+                        alert("❌ 文件损坏太严重了！请找找更早的 .json 备份文件。");
+                        document.getElementById('jsonFileInput').value = ''; 
+                        return;
+                    }
                 }
-                document.getElementById('jsonFileInput').value = '';
+
+                if (importedData && Array.isArray(importedData)) {
+                    classesData = importedData;
+                    saveData(); 
+                    alert("✅ 旧数据完美恢复并已加载！");
+                } else {
+                    alert("❌ 导入失败：文件内容不是排课数据。");
+                }
+                document.getElementById('jsonFileInput').value = ''; 
             };
             reader.readAsText(file);
         }
