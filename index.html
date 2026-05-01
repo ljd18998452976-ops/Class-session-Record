@@ -94,6 +94,24 @@
         .btn-del-payment { position: absolute; right: 5px; top: 5px; background: none; border: none; color: #999; cursor: pointer;}
         .btn-del-payment:hover { color: var(--danger); }
         
+        .btn-rollover { background-color: #FF9800; }
+        .history-panel { margin-top: 18px; border: 1px solid #ffe0b2; background: #fffaf2; border-radius: 8px; padding: 12px; }
+        .history-title { font-size: 16px; font-weight: bold; color: #e65100; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .history-hint { font-size: 12px; color: #777; font-weight: normal; }
+        .history-empty { color: #999; font-size: 13px; padding: 8px 0; }
+        .history-record { background: white; border: 1px solid #ffe0b2; border-radius: 6px; margin-top: 8px; overflow: hidden; }
+        .history-record-header { display: flex; align-items: center; gap: 8px; padding: 10px; background: #fff3e0; flex-wrap: wrap; }
+        .history-record-title { font-weight: bold; color: #bf360c; }
+        .history-record-meta { color: #666; font-size: 13px; }
+        .history-actions { margin-left: auto; display: flex; gap: 6px; }
+        .btn-history-small { color: white; font-size: 12px; padding: 5px 8px; border-radius: 4px; }
+        .btn-history-export { background: #607D8B; }
+        .btn-history-delete { background: var(--danger); }
+        .history-table-wrap { overflow-x: auto; padding: 10px; }
+        .history-table { width: 100%; min-width: 760px; border-collapse: collapse; table-layout: auto; white-space: nowrap; }
+        .history-table th, .history-table td { position: static !important; left: auto !important; width: auto !important; background: white; border: 1px solid #eee; padding: 7px; font-size: 13px; }
+        .history-table th { background: #fff8e1; color: #e65100; }
+
         #jsonFileInput { display: none; }
     </style>
 </head>
@@ -188,7 +206,7 @@
                 }
             }
 
-            return [{ id: genUniqueId('c'), name: "新班级", students: [], sessions: [], attendanceData: {} }];
+            return [{ id: genUniqueId('c'), name: "新班级", students: [], sessions: [], attendanceData: {}, historyRecords: [] }];
         }
 
         // === 清理历史垃圾内存，防止存不进去 ===
@@ -209,54 +227,117 @@
         function getClass(id) { return classesData.find(c => String(c.id) === String(id)); }
         function getStudent(cid, sid) { const cls = getClass(cid); return cls ? cls.students.find(s => String(s.id) === String(sid)) : null; }
 
-        function normalizeClassArray(raw) {
-            // 兼容不同版本/不同导出方式：数组、包了一层对象、甚至 localStorage 整包导出的对象
-            let data = raw;
+        function safeNumber(val, fallback = 0) {
+            const n = parseFloat(val);
+            return Number.isFinite(n) ? n : fallback;
+        }
 
-            if (typeof data === 'string') {
-                try { data = JSON.parse(data); } catch(e) { return null; }
+        function looksLikeClass(obj) {
+            return !!(obj && typeof obj === 'object' && (
+                Array.isArray(obj.students) || Array.isArray(obj.sessions) || obj.attendanceData || obj.name || obj.className
+            ));
+        }
+
+        function unwrapMaybeJson(value) {
+            // 有些旧备份/浏览器导出的 localStorage 会把真正的数据再包成一层字符串
+            let v = value;
+            for (let i = 0; i < 3; i++) {
+                if (typeof v === 'string') {
+                    const t = v.trim().replace(/^\uFEFF/, '');
+                    if (!t) return null;
+                    if ((t.startsWith('[') && t.endsWith(']')) || (t.startsWith('{') && t.endsWith('}'))) {
+                        try { v = JSON.parse(t); continue; } catch(e) { return value; }
+                    }
+                }
+                break;
+            }
+            return v;
+        }
+
+        function normalizeClassArray(raw) {
+            // 超强兼容：支持旧版数组、单班级对象、外层包裹对象、localStorage 整包、字段名变化、甚至对象映射表
+            let data = unwrapMaybeJson(raw);
+
+            if (!Array.isArray(data) && looksLikeClass(data)) {
+                data = [data];
             }
 
             if (!Array.isArray(data) && data && typeof data === 'object') {
                 const possibleKeys = [
-                    'classesData', 'classes', 'data', 'list',
-                    'geminiClassData_v8', 'geminiClassData_v7', 'geminiClassData_v6',
+                    'classesData', 'classes', 'classData', 'classList', 'data', 'list', 'records', 'items', 'backup', 'payload',
+                    'geminiClassData_v9', 'geminiClassData_v8', 'geminiClassData_v7', 'geminiClassData_v6',
                     'geminiClassData_v5_5', 'geminiClassData_v5_4', 'geminiClassData_v5_3',
-                    'geminiClassData_v5_2', 'geminiClassData_v5_1', 'geminiClassData_v5', 'geminiClassData_v4'
+                    'geminiClassData_v5_2', 'geminiClassData_v5_1', 'geminiClassData_v5', 'geminiClassData_v4',
+                    'classHoursData', 'superClassData', 'hourManagerData'
                 ];
                 for (let key of possibleKeys) {
-                    if (data[key]) {
+                    if (Object.prototype.hasOwnProperty.call(data, key)) {
                         let nested = normalizeClassArray(data[key]);
-                        if (Array.isArray(nested)) return nested;
+                        if (Array.isArray(nested) && nested.length) return nested;
                     }
                 }
+
+                // localStorage 整包可能是 {key1: '...', key2: '...'}；逐个值里找班级数据
+                for (let key of Object.keys(data)) {
+                    let nested = normalizeClassArray(data[key]);
+                    if (Array.isArray(nested) && nested.length) return nested;
+                }
+
+                // 也可能是 {班级id:{...}, 班级id:{...}} 这种映射表
+                const values = Object.values(data).filter(looksLikeClass);
+                if (values.length) data = values;
             }
 
             if (!Array.isArray(data)) return null;
 
-            data.forEach((cls, cIndex) => {
-                if (!cls || typeof cls !== 'object') return;
+            const normalized = data.map((rawCls, cIndex) => {
+                if (!rawCls || typeof rawCls !== 'object') return null;
+                const cls = rawCls;
                 if (!cls.id) cls.id = genUniqueId('c') + '_' + cIndex;
-                if (!cls.name) cls.name = '未命名班级';
-                if (!Array.isArray(cls.students)) cls.students = [];
-                if (!Array.isArray(cls.sessions)) cls.sessions = [];
-                if (!cls.attendanceData || typeof cls.attendanceData !== 'object') cls.attendanceData = {};
+                if (!cls.name) cls.name = cls.className || cls.title || cls.groupName || '未命名班级';
+                if (!Array.isArray(cls.students)) cls.students = Array.isArray(cls.babies) ? cls.babies : (Array.isArray(cls.members) ? cls.members : []);
+                if (!Array.isArray(cls.sessions)) cls.sessions = Array.isArray(cls.lessons) ? cls.lessons : (Array.isArray(cls.courseSessions) ? cls.courseSessions : []);
+                if (!cls.attendanceData || typeof cls.attendanceData !== 'object' || Array.isArray(cls.attendanceData)) {
+                    cls.attendanceData = cls.attendance || cls.records || {};
+                    if (!cls.attendanceData || typeof cls.attendanceData !== 'object' || Array.isArray(cls.attendanceData)) cls.attendanceData = {};
+                }
+                if (!Array.isArray(cls.historyRecords)) {
+                    cls.historyRecords = Array.isArray(cls.archives) ? cls.archives : (Array.isArray(cls.histories) ? cls.histories : (Array.isArray(cls.rolloverHistory) ? cls.rolloverHistory : []));
+                }
 
-                cls.students.forEach((st, sIndex) => {
-                    if (!st.id) st.id = genUniqueId('st') + '_' + sIndex;
-                    if (st.name === undefined || st.name === null) st.name = '';
-                    if (!Array.isArray(st.payments)) st.payments = [];
-                    st.totalHours = parseFloat(st.totalHours) || 0;
+                cls.students = cls.students.map((rawSt, sIndex) => {
+                    const st = (rawSt && typeof rawSt === 'object') ? rawSt : { name: String(rawSt || '') };
+                    if (!st.id) st.id = genUniqueId('st') + '_' + cIndex + '_' + sIndex;
+                    if (st.name === undefined || st.name === null) st.name = st.studentName || st.babyName || st.nickname || '';
+                    if (!Array.isArray(st.payments)) st.payments = Array.isArray(st.paymentRecords) ? st.paymentRecords : [];
+                    st.totalHours = safeNumber(st.totalHours ?? st.hours ?? st.total ?? st.remainingHours, 0);
+                    return st;
                 });
 
-                cls.sessions.forEach((ss, ssIndex) => {
-                    if (!ss.id) ss.id = genUniqueId('s') + '_' + ssIndex;
-                    if (!ss.date) ss.date = '';
-                    ss.duration = parseFloat(ss.duration) || 0;
+                cls.sessions = cls.sessions.map((rawSs, ssIndex) => {
+                    const ss = (rawSs && typeof rawSs === 'object') ? rawSs : { date: String(rawSs || '') };
+                    if (!ss.id) ss.id = genUniqueId('s') + '_' + cIndex + '_' + ssIndex;
+                    if (!ss.date) ss.date = ss.day || ss.lessonDate || ss.sessionDate || '';
+                    ss.duration = safeNumber(ss.duration ?? ss.hours ?? ss.length ?? ss.time, 0);
+                    return ss;
                 });
-            });
 
-            return data.filter(cls => cls && typeof cls === 'object');
+                cls.historyRecords = cls.historyRecords.map((rawRec, rIndex) => {
+                    const rec = (rawRec && typeof rawRec === 'object') ? rawRec : { title: String(rawRec || '') };
+                    if (!rec.id) rec.id = genUniqueId('his') + '_' + cIndex + '_' + rIndex;
+                    if (!rec.createdAt) rec.createdAt = rec.date || rec.time || '';
+                    if (!rec.title) rec.title = '结转记录';
+                    if (!Array.isArray(rec.rows)) rec.rows = Array.isArray(rec.details) ? rec.details : [];
+                    rec.sessionCount = safeNumber(rec.sessionCount, 0);
+                    rec.classTotalHours = safeNumber(rec.classTotalHours ?? rec.totalHours ?? rec.hours, 0);
+                    return rec;
+                });
+                cls.archives = cls.historyRecords; // 兼容旧版/新版两种历史字段名
+
+                return cls;
+            }).filter(Boolean);
+
+            return normalized.length ? normalized : null;
         }
 
         function healData() {
@@ -285,7 +366,7 @@
         }
 
         function addNewClass() {
-            const newClass = { id: genUniqueId('c'), name: "新班级", students: [], sessions: [], attendanceData: {} };
+            const newClass = { id: genUniqueId('c'), name: "新班级", students: [], sessions: [], attendanceData: {}, historyRecords: [] };
             classesData.unshift(newClass);
             activeClassId = String(newClass.id);
             localStorage.setItem('geminiActiveClassId_v8', activeClassId);
@@ -351,6 +432,7 @@
                         <button class="btn-add-student" onclick="addStudent('${classItem.id}')">+ 添加宝贝</button>
                         <button class="btn-add-session" onclick="openSessionModal('${classItem.id}')">+ 新增一次课</button>
                         <button class="btn-export-csv" onclick="exportClassCSV('${classItem.id}')">📊 导出表格</button>
+                        <button class="btn-rollover" onclick="rolloverClass('${classItem.id}')">📚 一键结转</button>
                         <button class="btn-clear-class" onclick="clearClassData('${classItem.id}')">🧹 清空记录</button>
                         <button class="btn-delete-class" onclick="deleteClass('${classItem.id}')">🗑️ 删除此班</button>
                     </div>
@@ -446,9 +528,116 @@
                     headerHtml += tableContent;
                 });
 
+                headerHtml += renderHistoryPanel(classItem);
                 classCard.innerHTML = headerHtml;
                 container.appendChild(classCard);
             });
+        }
+
+
+        function calculateClassSummary(cls) {
+            const sessions = Array.isArray(cls.sessions) ? cls.sessions : [];
+            const students = Array.isArray(cls.students) ? cls.students : [];
+            const classTotalHours = sessions.reduce((sum, session) => sum + (parseFloat(session.duration)||0), 0);
+            const dateRange = sessions.length ? `${sessions[0].date || '未填日期'} ~ ${sessions[sessions.length - 1].date || '未填日期'}` : '暂无日期';
+            const rows = students.map(st => {
+                let used = 0, attended = 0, leave = 0, absent = 0, makeup = 0, empty = 0;
+                sessions.forEach(ss => {
+                    const status = cls.attendanceData[`${st.id}_${ss.id}`] || '';
+                    if (status === '✅出勤') { used += (parseFloat(ss.duration)||0); attended++; }
+                    else if (status === '❌旷课') { used += (parseFloat(ss.duration)||0); absent++; }
+                    else if (status === '🔄补课') { used += (parseFloat(ss.duration)||0); makeup++; }
+                    else if (status === '🏖️事假' || status === '🤒病假') { leave++; }
+                    else { empty++; }
+                });
+                const total = parseFloat(st.totalHours) || 0;
+                const remain = +(total - used).toFixed(2);
+                return { studentId: st.id, name: st.name || '未命名宝贝', beforeTotal: total, used: +used.toFixed(2), remain, attended, leave, absent, makeup, empty };
+            });
+            return { id: genUniqueId('his'), createdAt: new Date().toLocaleString('zh-CN', { hour12: false }), title: `结转记录 ${getToday()}`, dateRange, sessionCount: sessions.length, classTotalHours: +classTotalHours.toFixed(2), rows };
+        }
+
+        function renderHistoryPanel(cls) {
+            const records = Array.isArray(cls.historyRecords) ? cls.historyRecords : [];
+            let html = `
+                <div class="history-panel">
+                    <div class="history-title">📚 历史课时消耗记录 <span class="history-hint">点击“一键结转”后会把当前表格归档到这里，方便回看每一期消耗。</span></div>
+            `;
+            if (!records.length) {
+                html += `<div class="history-empty">暂无历史结转记录。当前班级结转一次后，这里会出现历史消耗明细。</div>`;
+            } else {
+                [...records].reverse().forEach(rec => {
+                    const safeTitle = escapeHtml(rec.title || '结转记录');
+                    html += `
+                        <div class="history-record">
+                            <div class="history-record-header">
+                                <span class="history-record-title">${safeTitle}</span>
+                                <span class="history-record-meta">${escapeHtml(rec.dateRange || '')}｜${rec.sessionCount || 0} 次课｜${rec.classTotalHours || 0} 小时｜生成：${escapeHtml(rec.createdAt || '')}</span>
+                                <div class="history-actions">
+                                    <button class="btn-history-small btn-history-export" onclick="exportHistoryCSV('${cls.id}', '${rec.id}')">导出本期</button>
+                                    <button class="btn-history-small btn-history-delete" onclick="deleteHistoryRecord('${cls.id}', '${rec.id}')">删除</button>
+                                </div>
+                            </div>
+                            <div class="history-table-wrap">
+                                <table class="history-table">
+                                    <thead><tr><th>宝贝姓名</th><th>结转前总课时</th><th>本期已消</th><th>结转后剩余</th><th>出勤</th><th>请假</th><th>补课</th><th>旷课</th><th>未填</th></tr></thead>
+                                    <tbody>
+                    `;
+                    (rec.rows || []).forEach(row => {
+                        html += `<tr><td>${escapeHtml(row.name)}</td><td>${row.beforeTotal ?? 0}</td><td>${row.used ?? 0}</td><td>${row.remain ?? 0}</td><td>${row.attended ?? 0}</td><td>${row.leave ?? 0}</td><td>${row.makeup ?? 0}</td><td>${row.absent ?? 0}</td><td>${row.empty ?? 0}</td></tr>`;
+                    });
+                    html += `</tbody></table></div></div>`;
+                });
+            }
+            html += `</div>`;
+            return html;
+        }
+
+        function rolloverClass(classId) {
+            const cls = getClass(classId);
+            if (!cls) return;
+            if (!cls.sessions || cls.sessions.length === 0) { alert('当前班级还没有课次记录，暂时不能结转。'); return; }
+            const summary = calculateClassSummary(cls);
+            const ok = confirm(`确定要结转【${cls.name || '未命名班级'}】吗？\n\n本次会归档 ${summary.sessionCount} 次课，共 ${summary.classTotalHours} 小时。\n结转后：每个宝贝的“总课时”会变成当前剩余课时，当前课次和考勤表会清空，历史明细会保留在下方。`);
+            if (!ok) return;
+            if (!Array.isArray(cls.historyRecords)) cls.historyRecords = [];
+            cls.historyRecords.push(summary);
+            summary.rows.forEach(row => { const st = getStudent(classId, row.studentId); if (st) st.totalHours = row.remain; });
+            cls.sessions = [];
+            cls.attendanceData = {};
+            saveData();
+            alert('✅ 结转完成！历史课时消耗记录已生成在当前班级下方。');
+        }
+
+        function deleteHistoryRecord(classId, recordId) {
+            const cls = getClass(classId);
+            if (!cls || !Array.isArray(cls.historyRecords)) return;
+            if (!confirm('确定删除这条历史结转记录吗？删除后无法恢复，建议先导出数据备份。')) return;
+            cls.historyRecords = cls.historyRecords.filter(r => String(r.id) !== String(recordId));
+            saveData();
+        }
+
+        function exportHistoryCSV(classId, recordId) {
+            const cls = getClass(classId);
+            if (!cls || !Array.isArray(cls.historyRecords)) return;
+            const rec = cls.historyRecords.find(r => String(r.id) === String(recordId));
+            if (!rec) return;
+            let csv = "\uFEFF班级," + (cls.name || '') + "\n";
+            csv += "结转标题," + (rec.title || '') + "\n";
+            csv += "课次范围," + (rec.dateRange || '') + "\n";
+            csv += "课次数," + (rec.sessionCount || 0) + "\n";
+            csv += "班级整体消耗小时," + (rec.classTotalHours || 0) + "\n";
+            csv += "生成时间," + (rec.createdAt || '') + "\n\n";
+            csv += "宝贝姓名,结转前总课时,本期已消,结转后剩余,出勤,请假,补课,旷课,未填\n";
+            (rec.rows || []).forEach(row => { csv += `${row.name || ''},${row.beforeTotal || 0},${row.used || 0},${row.remain || 0},${row.attended || 0},${row.leave || 0},${row.makeup || 0},${row.absent || 0},${row.empty || 0}\n`; });
+            const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = `${cls.name || '班级'}-${rec.title || '历史结转'}-${getToday()}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(link.href);
         }
 
         // ------------------ 操作逻辑 ------------------
@@ -616,59 +805,144 @@
         }
 
         function autoFixTruncatedJSON(str) {
-            let fixed = str.trim();
-            for(let i=0; i<20; i++) {
+            let fixed = String(str || '').trim().replace(/^\uFEFF/, '');
+            for(let i=0; i<30; i++) {
                 try { JSON.parse(fixed); return fixed; } catch(e) {}
                 try { JSON.parse(fixed + '}'); fixed += '}'; continue; } catch(e) {}
                 try { JSON.parse(fixed + ']'); fixed += ']'; continue; } catch(e) {}
                 try { JSON.parse(fixed + '"}'); fixed += '"}'; continue; } catch(e) {}
-                break; 
+                try { JSON.parse(fixed + '"}]'); fixed += '"}]'; continue; } catch(e) {}
+                break;
             }
             return fixed;
         }
 
-        function tryParseBackupContent(content) {
-            // 先按标准 JSON 解析；失败再尝试修复残缺 JSON
-            try { return JSON.parse(content); } catch (error) {}
-            let fixedContent = autoFixTruncatedJSON(content);
-            try {
-                alert("⚠️ 系统强行缝合了您残缺的备份文件！");
-                return JSON.parse(fixedContent);
-            } catch (err2) {
-                return null;
+        function extractJsonLikeText(content) {
+            const raw = String(content || '').trim().replace(/^\uFEFF/, '');
+            if (!raw) return raw;
+            const firstObj = raw.indexOf('{');
+            const firstArr = raw.indexOf('[');
+            let start = -1;
+            if (firstObj >= 0 && firstArr >= 0) start = Math.min(firstObj, firstArr);
+            else start = Math.max(firstObj, firstArr);
+            if (start > 0) {
+                const lastObj = raw.lastIndexOf('}');
+                const lastArr = raw.lastIndexOf(']');
+                const end = Math.max(lastObj, lastArr);
+                if (end > start) return raw.slice(start, end + 1);
             }
+            return raw;
+        }
+
+        function tryParseBackupContent(content) {
+            // 1 标准 JSON；2 截取 JSON 主体；3 修复残缺；4 localStorage 导出字符串
+            const candidates = [];
+            const raw = String(content || '').replace(/^\uFEFF/, '');
+            candidates.push(raw);
+            const extracted = extractJsonLikeText(raw);
+            if (extracted !== raw) candidates.push(extracted);
+            candidates.push(autoFixTruncatedJSON(extracted));
+
+            for (let text of candidates) {
+                if (!text) continue;
+                try { return JSON.parse(text); } catch(e) {}
+            }
+            return null;
+        }
+
+
+
+        function findClassArraysDeep(value, depth = 0) {
+            // 兜底扫描：无论备份外面包了几层，只要里面有班级数组就抓出来
+            if (depth > 5 || value === null || value === undefined) return null;
+            const direct = normalizeClassArray(value);
+            if (Array.isArray(direct) && direct.length) return direct;
+            const unwrapped = unwrapMaybeJson(value);
+            if (unwrapped !== value) {
+                const nested = findClassArraysDeep(unwrapped, depth + 1);
+                if (Array.isArray(nested) && nested.length) return nested;
+            }
+            if (Array.isArray(value)) {
+                const classLikeItems = value.filter(looksLikeClass);
+                if (classLikeItems.length) return normalizeClassArray(classLikeItems);
+                for (const item of value) {
+                    const nested = findClassArraysDeep(item, depth + 1);
+                    if (Array.isArray(nested) && nested.length) return nested;
+                }
+            }
+            if (value && typeof value === 'object') {
+                const priorityKeys = [
+                    'classesData','classes','classData','classList','data','list','records','items','backup','payload',
+                    'geminiClassData_v10','geminiClassData_v9','geminiClassData_v8','geminiClassData_v7','geminiClassData_v6',
+                    'geminiClassData_v5_5','geminiClassData_v5_4','geminiClassData_v5_3','geminiClassData_v5_2','geminiClassData_v5_1','geminiClassData_v5','geminiClassData_v4'
+                ];
+                for (const key of priorityKeys) {
+                    if (Object.prototype.hasOwnProperty.call(value, key)) {
+                        const nested = findClassArraysDeep(value[key], depth + 1);
+                        if (Array.isArray(nested) && nested.length) return nested;
+                    }
+                }
+                for (const key of Object.keys(value)) {
+                    const nested = findClassArraysDeep(value[key], depth + 1);
+                    if (Array.isArray(nested) && nested.length) return nested;
+                }
+            }
+            return null;
+        }
+
+        function commitImportedClasses(importedClasses) {
+            const normalized = normalizeClassArray(importedClasses);
+            if (!Array.isArray(normalized) || !normalized.length) return false;
+            try { localStorage.setItem('geminiClassData_before_import_backup', JSON.stringify(classesData || [])); } catch(e) {}
+            classesData = normalized;
+            activeClassId = String(classesData[0].id);
+            try {
+                // 同时写入多个保险箱，避免以后版本切换又读不到
+                localStorage.setItem('geminiClassData_v10', JSON.stringify(classesData));
+                localStorage.setItem('geminiClassData_v9', JSON.stringify(classesData));
+                localStorage.setItem('geminiClassData_v8', JSON.stringify(classesData));
+                localStorage.setItem('geminiActiveClassId_v8', activeClassId);
+                localStorage.setItem('geminiActiveClassId_v10', activeClassId);
+            } catch(e) {
+                alert('⚠️ 数据已读到，但浏览器本地存储空间可能满了。建议先导出备份，再清理浏览器缓存。');
+            }
+            renderAllClasses();
+            return true;
         }
 
         function importAllJSON(event) {
             const file = event.target.files[0];
             if (!file) return;
 
-            if (!file.name.toLowerCase().endsWith('.json')) {
-                alert("❌ 宝，选错文件啦！请选择 .json 结尾的数据存档文件！");
-                document.getElementById('jsonFileInput').value = '';
-                return;
-            }
-
             const reader = new FileReader();
             reader.onload = function(e) {
-                const content = e.target.result;
-                const parsed = tryParseBackupContent(content);
-                const importedClasses = normalizeClassArray(parsed);
+                try {
+                    const content = e.target.result;
+                    const parsed = tryParseBackupContent(content);
+                    let importedClasses = null;
 
-                if (Array.isArray(importedClasses)) {
-                    classesData = importedClasses;
-                    activeClassId = classesData[0] ? String(classesData[0].id) : null;
-                    localStorage.setItem('geminiClassData_v8', JSON.stringify(classesData));
-                    if (activeClassId) localStorage.setItem('geminiActiveClassId_v8', activeClassId);
-                    healData();
-                    renderAllClasses();
-                    alert(`✅ 导入成功！已读取 ${classesData.length} 个班级，并已切换到第一个班级。`);
-                } else {
-                    alert("❌ 导入失败：这个备份不是可识别的班级数据。请确认是以前导出的 .json 存档。");
+                    // 逐级兜底：标准 JSON → 原始文本 → 深度扫描
+                    importedClasses = normalizeClassArray(parsed);
+                    if (!Array.isArray(importedClasses) || !importedClasses.length) importedClasses = normalizeClassArray(content);
+                    if (!Array.isArray(importedClasses) || !importedClasses.length) importedClasses = findClassArraysDeep(parsed);
+                    if (!Array.isArray(importedClasses) || !importedClasses.length) importedClasses = findClassArraysDeep(content);
+
+                    if (Array.isArray(importedClasses) && importedClasses.length && commitImportedClasses(importedClasses)) {
+                        const names = classesData.slice(0, 5).map(c => c.name || '未命名班级').join('、');
+                        alert(`✅ 导入成功！已读取 ${classesData.length} 个班级。\n\n已导入：${names}${classesData.length > 5 ? '……' : ''}\n\n班级切换、一键结转、历史记录、缴费记录、CSV导出都保留。`);
+                    } else {
+                        alert("❌ 导入失败：没有识别到班级数据。\n\n这个版本已经支持旧版数组、带 history/archive 的备份、localStorage 整包和多层包裹 JSON。若仍失败，请把文件发我，我会继续按文件实际结构修。");
+                    }
+                } catch(err) {
+                    alert("❌ 导入时出错：" + err.message + "\n\n当前表格数据没有被覆盖。");
                 }
                 document.getElementById('jsonFileInput').value = '';
             };
-            reader.readAsText(file);
+            reader.onerror = function() {
+                alert('❌ 文件读取失败，请重新选择备份 JSON 文件。');
+                document.getElementById('jsonFileInput').value = '';
+            };
+            reader.readAsText(file, 'UTF-8');
         }
     </script>
 </body>
