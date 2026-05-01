@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BOBO超级班级课时管家</title>
+    <title>超级班级课时管家 - 班级切换版</title>
     <style>
         :root {
             --primary: #4CAF50;
@@ -16,8 +16,17 @@
         }
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg); margin: 0; padding: 20px; color: #333; }
         
-        .global-controls { display: flex; gap: 10px; margin-bottom: 20px; align-items: center; background: #2C3E50; padding: 15px 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); color: white; flex-wrap: wrap; }
+        .global-controls { display: flex; gap: 10px; margin-bottom: 12px; align-items: center; background: #2C3E50; padding: 15px 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); color: white; flex-wrap: wrap; position: sticky; top: 0; z-index: 50; }
         .global-title { font-size: 20px; font-weight: bold; margin-right: 20px; }
+        .switcher-panel { background: #ffffff; border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-bottom: 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); position: sticky; top: 78px; z-index: 45; }
+        .switcher-top { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+        .switcher-label { font-weight: bold; color: #2C3E50; white-space: nowrap; }
+        .class-jump-select { min-width: 220px; padding: 8px 10px; border: 1px solid #bbb; border-radius: 6px; font-size: 15px; background: #fff; }
+        .switcher-hint { color: #777; font-size: 12px; }
+        .class-tabs { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 3px; }
+        .class-tab { flex: 0 0 auto; background: #f5f5f5; color: #333; border: 1px solid #ddd; border-radius: 999px; padding: 8px 14px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .class-tab.active { background: var(--primary); color: white; border-color: var(--primary); box-shadow: 0 2px 6px rgba(76,175,80,0.35); }
+        .class-tab .count { font-size: 12px; opacity: .8; margin-left: 4px; }
         button { padding: 8px 14px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; color: white; transition: 0.2s; font-size: 14px; }
         button:hover { opacity: 0.9; transform: translateY(-1px); }
         .btn-global-add { background-color: var(--primary); font-size: 16px; padding: 10px 20px; }
@@ -35,9 +44,6 @@
         .btn-add-student { background-color: #2196F3; }
         .btn-add-session { background-color: var(--primary); }
         .btn-export-csv { background-color: #607D8B; }
-        .btn-archive-class { background-color: #FF9800; color: white; border: 1px solid #F57C00; }
-        .btn-archive-class:hover { background-color: #F57C00; }
-        
         .btn-clear-class { background-color: white; color: var(--warning); border: 1px solid var(--warning); margin-left: auto; }
         .btn-clear-class:hover { background-color: var(--warning); color: white; }
         .btn-delete-class { background-color: white; color: var(--danger); border: 1px solid var(--danger); }
@@ -70,15 +76,6 @@
         .status-select.absent { background-color: #ffebee; color: #c62828; }
         .alert-text { color: var(--warning); font-weight: bold; }
 
-        /* 历史档案相关样式 */
-        .btn-toggle-archive { background-color: #fafafa; color: #666; border: 1px dashed #ccc; width: 100%; padding: 12px; border-radius: 6px; margin-top: 20px; font-size: 14px; font-weight: bold; cursor: pointer; transition: 0.3s;}
-        .btn-toggle-archive:hover { background-color: #eeeeee; color: #333; }
-        .archive-block { background: #f9f9f9; border: 1px solid #eee; padding: 15px; margin-top: 15px; border-radius: 8px; box-shadow: inset 0 2px 5px rgba(0,0,0,0.02); }
-        .archive-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px dashed #ccc; padding-bottom: 10px;}
-        .archive-date { font-size: 16px; font-weight: bold; color: #FF9800; }
-        .archive-table th { background-color: #e0e0e0; color: #555; }
-        .archive-table td { color: #666; }
-
         .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 100; justify-content: center; align-items: center; }
         .modal { background: white; padding: 20px; border-radius: 8px; width: 320px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-height: 90vh; overflow-y: auto;}
         .modal h3 { margin-top: 0; color: #333; border-bottom: 2px solid #eee; padding-bottom: 10px;}
@@ -103,7 +100,7 @@
 <body>
 
     <div class="global-controls">
-        <div class="global-title">🏫 宝贝课时总管家</div>
+        <div class="global-title">🏫 宝贝课时总管家 · 班级切换版</div>
         <button class="btn-global-add" onclick="addNewClass()">➕ 新增一个班级</button>
         <div style="flex-grow: 1;"></div>
         <span style="font-size: 12px; color: #aaa; margin-right: 10px;">自动保存已开启</span>
@@ -111,6 +108,8 @@
         <button class="btn-load-json" onclick="document.getElementById('jsonFileInput').click()">📂 导入数据恢复</button>
         <input type="file" id="jsonFileInput" accept=".json" onchange="importAllJSON(event)">
     </div>
+
+    <div class="switcher-panel" id="classSwitcher"></div>
 
     <datalist id="hours-preset">
         <option value="5"></option><option value="10"></option><option value="15"></option><option value="20"></option>
@@ -170,28 +169,32 @@
     </div>
 
     <script>
+        // ------------------ 统一工具域 ------------------
         function genUniqueId(prefix) { return prefix + '_' + Date.now() + '_' + Math.floor(Math.random() * 10000); }
 
+        // === 💥修复失忆症：第一眼一定要看最新版的 V8！💥 ===
         function loadInitialData() {
-            let currentData = localStorage.getItem('geminiClassData_v10');
-            if (currentData) { try { return JSON.parse(currentData); } catch(e) {} }
-
-            const legacyVersions = [
-                'geminiClassData_v9', 'geminiClassData_v8', 'geminiClassData_v7', 'geminiClassData_v6', 'geminiClassData_v5_5', 
-                'geminiClassData_v5_4', 'geminiClassData_v5_3', 'geminiClassData_v5_2', 
+            const allVersions = [
+                'geminiClassData_v8', 'geminiClassData_v7', 'geminiClassData_v6', 'geminiClassData_v5_5',
+                'geminiClassData_v5_4', 'geminiClassData_v5_3', 'geminiClassData_v5_2',
                 'geminiClassData_v5_1', 'geminiClassData_v5', 'geminiClassData_v4'
             ];
-            
-            for (let v of legacyVersions) {
+
+            for (let v of allVersions) {
                 let data = localStorage.getItem(v);
-                if (data) { try { return JSON.parse(data); } catch(e) {} }
+                if (data) {
+                    const normalized = normalizeClassArray(data);
+                    if (Array.isArray(normalized)) return normalized;
+                }
             }
-            return [{ id: genUniqueId('c'), name: "新班级", students: [], sessions: [], attendanceData: {}, archives: [] }];
+
+            return [{ id: genUniqueId('c'), name: "新班级", students: [], sessions: [], attendanceData: {} }];
         }
 
+        // === 清理历史垃圾内存，防止存不进去 ===
         function clearLegacyMemory() {
             const legacyVersions = [
-                'geminiClassData_v9', 'geminiClassData_v8', 'geminiClassData_v7', 'geminiClassData_v6', 'geminiClassData_v5_5', 
+                'geminiClassData_v7', 'geminiClassData_v6', 'geminiClassData_v5_5', 
                 'geminiClassData_v5_4', 'geminiClassData_v5_3', 'geminiClassData_v5_2', 
                 'geminiClassData_v5_1', 'geminiClassData_v5', 'geminiClassData_v4'
             ];
@@ -199,51 +202,137 @@
         }
 
         let classesData = loadInitialData();
+        let activeClassId = localStorage.getItem('geminiActiveClassId_v8') || (classesData[0] ? String(classesData[0].id) : null);
         let currentOperateClassId = null;
         let currentOperateStudentId = null; 
 
         function getClass(id) { return classesData.find(c => String(c.id) === String(id)); }
         function getStudent(cid, sid) { const cls = getClass(cid); return cls ? cls.students.find(s => String(s.id) === String(sid)) : null; }
 
-        function healData() {
-            if (!Array.isArray(classesData)) classesData = [];
-            classesData.forEach(cls => {
-                if (!cls.students) cls.students = [];
-                if (!cls.sessions) cls.sessions = [];
-                if (!cls.attendanceData) cls.attendanceData = {};
-                if (!cls.archives) cls.archives = []; // 确保每个班级都有档案馆
-                cls.students.forEach(st => {
-                    if (!st.payments) st.payments = [];
+        function normalizeClassArray(raw) {
+            // 兼容不同版本/不同导出方式：数组、包了一层对象、甚至 localStorage 整包导出的对象
+            let data = raw;
+
+            if (typeof data === 'string') {
+                try { data = JSON.parse(data); } catch(e) { return null; }
+            }
+
+            if (!Array.isArray(data) && data && typeof data === 'object') {
+                const possibleKeys = [
+                    'classesData', 'classes', 'data', 'list',
+                    'geminiClassData_v8', 'geminiClassData_v7', 'geminiClassData_v6',
+                    'geminiClassData_v5_5', 'geminiClassData_v5_4', 'geminiClassData_v5_3',
+                    'geminiClassData_v5_2', 'geminiClassData_v5_1', 'geminiClassData_v5', 'geminiClassData_v4'
+                ];
+                for (let key of possibleKeys) {
+                    if (data[key]) {
+                        let nested = normalizeClassArray(data[key]);
+                        if (Array.isArray(nested)) return nested;
+                    }
+                }
+            }
+
+            if (!Array.isArray(data)) return null;
+
+            data.forEach((cls, cIndex) => {
+                if (!cls || typeof cls !== 'object') return;
+                if (!cls.id) cls.id = genUniqueId('c') + '_' + cIndex;
+                if (!cls.name) cls.name = '未命名班级';
+                if (!Array.isArray(cls.students)) cls.students = [];
+                if (!Array.isArray(cls.sessions)) cls.sessions = [];
+                if (!cls.attendanceData || typeof cls.attendanceData !== 'object') cls.attendanceData = {};
+
+                cls.students.forEach((st, sIndex) => {
+                    if (!st.id) st.id = genUniqueId('st') + '_' + sIndex;
+                    if (st.name === undefined || st.name === null) st.name = '';
+                    if (!Array.isArray(st.payments)) st.payments = [];
                     st.totalHours = parseFloat(st.totalHours) || 0;
                 });
+
+                cls.sessions.forEach((ss, ssIndex) => {
+                    if (!ss.id) ss.id = genUniqueId('s') + '_' + ssIndex;
+                    if (!ss.date) ss.date = '';
+                    ss.duration = parseFloat(ss.duration) || 0;
+                });
             });
+
+            return data.filter(cls => cls && typeof cls === 'object');
+        }
+
+        function healData() {
+            const normalized = normalizeClassArray(classesData);
+            classesData = Array.isArray(normalized) ? normalized : [];
+            if (classesData.length && !getClass(activeClassId)) {
+                activeClassId = String(classesData[0].id);
+                localStorage.setItem('geminiActiveClassId_v8', activeClassId);
+            }
         }
 
         window.onload = () => {
             document.getElementById('newSessionDate').valueAsDate = new Date();
             document.getElementById('payDate').valueAsDate = new Date();
             healData(); 
-            clearLegacyMemory(); 
+            clearLegacyMemory(); // 顺手倒个垃圾
             renderAllClasses();
-            saveData(); 
+            saveData(); // 把继承来的数据死死锁进 V8 保险箱
         };
 
         function saveData() {
-            healData(); 
-            localStorage.setItem('geminiClassData_v10', JSON.stringify(classesData));
-            renderAllClasses(); 
+            healData();
+            localStorage.setItem('geminiClassData_v8', JSON.stringify(classesData));
+            if (activeClassId) localStorage.setItem('geminiActiveClassId_v8', activeClassId);
+            renderAllClasses();
         }
 
         function addNewClass() {
-            classesData.unshift({ id: genUniqueId('c'), name: "新班级", students: [], sessions: [], attendanceData: {}, archives: [] });
+            const newClass = { id: genUniqueId('c'), name: "新班级", students: [], sessions: [], attendanceData: {} };
+            classesData.unshift(newClass);
+            activeClassId = String(newClass.id);
+            localStorage.setItem('geminiActiveClassId_v8', activeClassId);
             saveData();
         }
 
+        function switchClass(id) {
+            activeClassId = String(id);
+            localStorage.setItem('geminiActiveClassId_v8', activeClassId);
+            renderAllClasses();
+        }
+
+        function escapeHtml(str) {
+            return String(str ?? '').replace(/[&<"'>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+        }
+
+        function renderClassSwitcher() {
+            const switcher = document.getElementById('classSwitcher');
+            if (!switcher) return;
+            if (!classesData.length) {
+                switcher.innerHTML = '<div class="switcher-hint">暂无班级，点击上方“新增一个班级”开始。</div>';
+                return;
+            }
+            if (!getClass(activeClassId)) {
+                activeClassId = String(classesData[0].id);
+                localStorage.setItem('geminiActiveClassId_v8', activeClassId);
+            }
+            const options = classesData.map(c => `<option value="${c.id}" ${String(c.id) === String(activeClassId) ? 'selected' : ''}>${escapeHtml(c.name || '未命名班级')}（${c.students.length}人 / ${c.sessions.length}次课）</option>`).join('');
+            const tabs = classesData.map(c => `<button class="class-tab ${String(c.id) === String(activeClassId) ? 'active' : ''}" onclick="switchClass('${c.id}')" title="${escapeHtml(c.name || '未命名班级')}">${escapeHtml(c.name || '未命名班级')}<span class="count">${c.students.length}人</span></button>`).join('');
+            switcher.innerHTML = `
+                <div class="switcher-top">
+                    <span class="switcher-label">🔄 当前录入班级：</span>
+                    <select class="class-jump-select" onchange="switchClass(this.value)">${options}</select>
+                    <span class="switcher-hint">下面只显示当前班级，录入不用再来回拖动。</span>
+                </div>
+                <div class="class-tabs">${tabs}</div>
+            `;
+        }
+
+        // ------------------ 渲染核心 ------------------
         function renderAllClasses() {
             const container = document.getElementById('classesContainer');
             container.innerHTML = '';
+            renderClassSwitcher();
 
-            classesData.forEach(classItem => {
+            const visibleClasses = getClass(activeClassId) ? [getClass(activeClassId)] : (classesData[0] ? [classesData[0]] : []);
+            visibleClasses.forEach(classItem => {
                 const classCard = document.createElement('div');
                 classCard.className = 'class-card';
                 
@@ -255,16 +344,14 @@
                         <input type="text" class="class-title" value="${classItem.name}" onchange="updateClassInfo('${classItem.id}', 'name', this.value)">
                         
                         <div class="progress-container">
-                            <span class="progress-label">🚩 本期进度：</span>
-                            <span class="progress-text">已开课 ${classTotalSessions} 次，消耗 ${classTotalHours} 小时</span>
+                            <span class="progress-label">🚩 班级整体进度：</span>
+                            <span class="progress-text">已开课 ${classTotalSessions} 次，整体消耗 ${classTotalHours} 小时</span>
                         </div>
 
                         <button class="btn-add-student" onclick="addStudent('${classItem.id}')">+ 添加宝贝</button>
                         <button class="btn-add-session" onclick="openSessionModal('${classItem.id}')">+ 新增一次课</button>
-                        <button class="btn-archive-class" onclick="archiveClass('${classItem.id}')" title="保留剩余课时，并将当前记录收进档案柜">📦 一键结转(生成快照)</button>
                         <button class="btn-export-csv" onclick="exportClassCSV('${classItem.id}')">📊 导出表格</button>
-                        
-                        <button class="btn-clear-class" onclick="clearClassData('${classItem.id}')">🧹 彻底清空</button>
+                        <button class="btn-clear-class" onclick="clearClassData('${classItem.id}')">🧹 清空记录</button>
                         <button class="btn-delete-class" onclick="deleteClass('${classItem.id}')">🗑️ 删除此班</button>
                     </div>
                 `;
@@ -276,13 +363,12 @@
                 }
                 if (chunks.length === 0) chunks = [[]];
 
-                // 渲染当前活跃表格
                 chunks.forEach((chunk, chunkIndex) => {
                     let tableContent = "";
                     if (chunk.length > 0) {
                         let start = chunkIndex * SESSIONS_PER_CHUNK + 1;
                         let end = start + chunk.length - 1;
-                        tableContent += `<div class="chunk-title">📅 活跃打卡区 (第 ${start} - ${end} 次课)</div>`;
+                        tableContent += `<div class="chunk-title">📅 第 ${start} - ${end} 次课</div>`;
                     }
 
                     tableContent += `<div class="table-container"><table><thead><tr>`;
@@ -360,129 +446,12 @@
                     headerHtml += tableContent;
                 });
 
-                // ================= 渲染历史档案区 =================
-                if (classItem.archives && classItem.archives.length > 0) {
-                    headerHtml += `
-                        <button class="btn-toggle-archive" onclick="toggleArchive('${classItem.id}')">
-                            📂 点击展开 / 收起 历史结转档案 (${classItem.archives.length} 份)
-                        </button>
-                        <div id="archive_container_${classItem.id}" style="display:none;">
-                    `;
-
-                    [...classItem.archives].reverse().forEach(arc => {
-                        headerHtml += `<div class="archive-block">
-                            <div class="archive-header">
-                                <span class="archive-date">📦 结转快照记录 (结转日期: ${arc.archiveDate})</span>
-                                <div>
-                                    <span style="font-size:13px; color:#777; margin-right:15px;">共 ${arc.sessions.length} 次课</span>
-                                    <button class="btn-icon-sm" style="color:var(--danger);" onclick="deleteArchive('${classItem.id}', '${arc.id}')" title="永久删除这份档案">🗑️删除档案</button>
-                                </div>
-                            </div>
-                            <div class="table-container archive-table">
-                                <table>
-                                    <thead>
-                                        <tr>
-                                            <th style="width:120px;">宝贝姓名</th>
-                                            <th style="width:80px;">结转前总课时</th>
-                                            <th style="width:70px;">该期已消</th>
-                                            <th style="width:80px; color:#FF9800;">结转后剩余</th>
-                        `;
-                        arc.sessions.forEach(s => {
-                            headerHtml += `<th style="font-weight:normal; font-size:13px;">${s.date}<br>(${s.duration}h)</th>`;
-                        });
-                        headerHtml += `</tr></thead><tbody>`;
-
-                        arc.students.forEach(st => {
-                            let used = 0;
-                            arc.sessions.forEach(s => {
-                                const status = arc.attendanceData[`${st.id}_${s.id}`] || '';
-                                if (status === '✅出勤' || status === '❌旷课' || status === '🔄补课') used += (parseFloat(s.duration)||0);
-                            });
-                            let remain = st.totalHours - used;
-                            
-                            headerHtml += `<tr>
-                                <td><strong>${st.name}</strong></td>
-                                <td>${st.totalHours}</td>
-                                <td>${used}</td>
-                                <td style="color:#FF9800; font-weight:bold; font-size:15px;">${remain}</td>
-                            `;
-                            arc.sessions.forEach(s => {
-                                const status = arc.attendanceData[`${st.id}_${s.id}`] || '';
-                                headerHtml += `<td style="font-size:13px;">${status || '-'}</td>`;
-                            });
-                            headerHtml += `</tr>`;
-                        });
-                        headerHtml += `</tbody></table></div></div>`;
-                    });
-                    headerHtml += `</div>`;
-                }
-
                 classCard.innerHTML = headerHtml;
                 container.appendChild(classCard);
             });
         }
 
-        // ================= 核心新功能：一键结转并生成档案 =================
-        function archiveClass(id) {
-            const cls = getClass(id);
-            if(!cls) return;
-            
-            if(cls.sessions.length === 0) {
-                return alert("当前还没有记录任何课时，不需要结转哦！");
-            }
-            
-            if(confirm("【📦 一键结转确认】\n\n系统将会：\n1. 把当前的打卡记录完整打包成一份「历史快照」，打上今天的日期，永久保存在下方的档案柜里。\n2. 自动算出宝贝们的「剩余课时」，并变成下期的「新总课时」。\n3. 清空活跃区的表格，为您准备好全新的记账空间。\n\n确定现在进行结转吗？")) {
-                
-                // 1. 创建历史档案快照，深拷贝死死冻结当前的数据
-                const archiveSnapshot = {
-                    id: genUniqueId('arc'),
-                    archiveDate: getToday(),
-                    sessions: JSON.parse(JSON.stringify(cls.sessions)),
-                    attendanceData: JSON.parse(JSON.stringify(cls.attendanceData)),
-                    students: JSON.parse(JSON.stringify(cls.students))
-                };
-                
-                if(!cls.archives) cls.archives = [];
-                cls.archives.push(archiveSnapshot);
-
-                // 2. 将每个宝贝的剩余课时，变成新的总课时
-                cls.students.forEach(st => {
-                    let used = 0;
-                    cls.sessions.forEach(s => {
-                        const status = cls.attendanceData[`${st.id}_${s.id}`] || '';
-                        if (status === '✅出勤' || status === '❌旷课' || status === '🔄补课') used += (parseFloat(s.duration)||0);
-                    });
-                    let remain = st.totalHours - used;
-                    st.totalHours = remain; 
-                });
-                
-                // 3. 清空活跃历史列和打卡记录
-                cls.sessions = [];
-                cls.attendanceData = {};
-                
-                saveData();
-                alert("✅ 结转成功！活跃区已清空，旧数据已安全存入班级下方的「历史结转档案」柜中！");
-            }
-        }
-
-        function toggleArchive(classId) {
-            const container = document.getElementById('archive_container_' + classId);
-            if(container.style.display === 'none') {
-                container.style.display = 'block';
-            } else {
-                container.style.display = 'none';
-            }
-        }
-
-        function deleteArchive(classId, archiveId) {
-            if(confirm("⚠️ 确定要永久删除这份历史结转档案吗？删除后将无法恢复！")) {
-                const cls = getClass(classId);
-                cls.archives = cls.archives.filter(a => String(a.id) !== String(archiveId));
-                saveData();
-            }
-        }
-        // ===================================================================
-
+        // ------------------ 操作逻辑 ------------------
         function updateClassInfo(id, field, val) { const cls = getClass(id); if(cls) { cls[field] = val; saveData(); } }
         
         function openSessionModal(id) { 
@@ -525,9 +494,20 @@
         function updateStudentName(cid, sid, val) { const st = getStudent(cid, sid); if(st){ st.name = val; saveData(); } }
         function updateStudentTotal(cid, sid, val) { const st = getStudent(cid, sid); if(st){ st.totalHours = parseFloat(val) || 0; saveData(); } }
         function updateAttendance(cid, sid, ssid, val) { const cls = getClass(cid); if(cls){ cls.attendanceData[`${sid}_${ssid}`] = val; saveData(); } }
-        function deleteClass(id) { if(confirm("确定彻底删除此班级吗？")) { classesData = classesData.filter(c => String(c.id) !== String(id)); saveData(); } }
-        function clearClassData(id) { if(confirm("确定清空本班所有考勤和宝贝记录吗？")) { const cls = getClass(id); if(cls){ cls.students = []; cls.sessions = []; cls.attendanceData = {}; cls.archives = []; saveData(); } } }
+        function deleteClass(id) {
+            if(confirm("确定彻底删除此班级吗？")) {
+                classesData = classesData.filter(c => String(c.id) !== String(id));
+                if (String(activeClassId) === String(id)) {
+                    activeClassId = classesData[0] ? String(classesData[0].id) : null;
+                    if (activeClassId) localStorage.setItem('geminiActiveClassId_v8', activeClassId);
+                    else localStorage.removeItem('geminiActiveClassId_v8');
+                }
+                saveData();
+            }
+        }
+        function clearClassData(id) { if(confirm("确定清空本班所有考勤和宝贝记录吗？")) { const cls = getClass(id); if(cls){ cls.students = []; cls.sessions = []; cls.attendanceData = {}; saveData(); } } }
 
+        // ------------------ 财务账本逻辑 ------------------
         function openPaymentModal(classId, studentId) {
             currentOperateClassId = classId;
             currentOperateStudentId = studentId;
@@ -589,13 +569,14 @@
             }
         }
 
+        // ------------------ 导出与导入底层 ------------------
         function getToday() { const t = new Date(); return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`; }
         
         function exportClassCSV(id) {
             try {
                 const cls = getClass(id);
                 if(!cls) return;
-                const name = `${cls.name}-活跃考勤表-${getToday()}.csv`;
+                const name = `${cls.name}-考勤记录-${getToday()}.csv`;
                 let classTotalSessions = cls.sessions.length;
                 let classTotalHours = cls.sessions.reduce((sum, session) => sum + (parseFloat(session.duration)||0), 0);
                 
@@ -626,7 +607,7 @@
                 const url = URL.createObjectURL(blob);
                 const link = document.createElement("a");
                 link.href = url;
-                link.download = `全部班级-带历史档案-数据备份-${getToday()}.json`;
+                link.download = `全部班级-数据备份-${getToday()}.json`;
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
@@ -646,43 +627,46 @@
             return fixed;
         }
 
+        function tryParseBackupContent(content) {
+            // 先按标准 JSON 解析；失败再尝试修复残缺 JSON
+            try { return JSON.parse(content); } catch (error) {}
+            let fixedContent = autoFixTruncatedJSON(content);
+            try {
+                alert("⚠️ 系统强行缝合了您残缺的备份文件！");
+                return JSON.parse(fixedContent);
+            } catch (err2) {
+                return null;
+            }
+        }
+
         function importAllJSON(event) {
             const file = event.target.files[0];
-            if (!file) return; 
-            
-            if (!file.name.endsWith('.json')) {
+            if (!file) return;
+
+            if (!file.name.toLowerCase().endsWith('.json')) {
                 alert("❌ 宝，选错文件啦！请选择 .json 结尾的数据存档文件！");
                 document.getElementById('jsonFileInput').value = '';
                 return;
             }
-            
+
             const reader = new FileReader();
             reader.onload = function(e) {
-                let content = e.target.result;
-                let importedData = null;
+                const content = e.target.result;
+                const parsed = tryParseBackupContent(content);
+                const importedClasses = normalizeClassArray(parsed);
 
-                try {
-                    importedData = JSON.parse(content);
-                } catch (error) {
-                    try {
-                        let fixedContent = autoFixTruncatedJSON(content);
-                        importedData = JSON.parse(fixedContent);
-                        alert("⚠️ 系统强行缝合了您残缺的备份文件！");
-                    } catch (err2) {
-                        alert("❌ 文件损坏太严重了！请找找更早的备份。");
-                        document.getElementById('jsonFileInput').value = ''; 
-                        return;
-                    }
-                }
-
-                if (importedData && Array.isArray(importedData)) {
-                    classesData = importedData;
-                    saveData(); 
-                    alert("✅ 导入成功！");
+                if (Array.isArray(importedClasses)) {
+                    classesData = importedClasses;
+                    activeClassId = classesData[0] ? String(classesData[0].id) : null;
+                    localStorage.setItem('geminiClassData_v8', JSON.stringify(classesData));
+                    if (activeClassId) localStorage.setItem('geminiActiveClassId_v8', activeClassId);
+                    healData();
+                    renderAllClasses();
+                    alert(`✅ 导入成功！已读取 ${classesData.length} 个班级，并已切换到第一个班级。`);
                 } else {
-                    alert("❌ 导入失败：文件内容不对。");
+                    alert("❌ 导入失败：这个备份不是可识别的班级数据。请确认是以前导出的 .json 存档。");
                 }
-                document.getElementById('jsonFileInput').value = ''; 
+                document.getElementById('jsonFileInput').value = '';
             };
             reader.readAsText(file);
         }
