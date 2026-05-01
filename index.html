@@ -1,9 +1,14 @@
+
+
+
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>超级班级课时管家 - 班级切换版</title>
+    <!-- 引入强大的 LZ-String 数据压缩库，把数据体积缩小 80% -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
     <style>
         :root {
             --primary: #4CAF50;
@@ -199,9 +204,17 @@
             ];
 
             for (let v of allVersions) {
-                let data = localStorage.getItem(v);
-                if (data) {
-                    const normalized = normalizeClassArray(data);
+                let rawData = localStorage.getItem(v);
+                if (rawData) {
+                    let textData = rawData;
+                    // 如果数据不是明显的 JSON 格式，说明是被压缩过的，尝试解压
+                    if (typeof LZString !== 'undefined' && !rawData.trim().startsWith('[') && !rawData.trim().startsWith('{')) {
+                        try {
+                            const decompressed = LZString.decompressFromUTF16(rawData);
+                            if (decompressed) textData = decompressed;
+                        } catch(e) { console.warn("解压尝试失败，将作为普通文本处理"); }
+                    }
+                    const normalized = normalizeClassArray(textData);
                     if (Array.isArray(normalized)) return normalized;
                 }
             }
@@ -209,14 +222,18 @@
             return [{ id: genUniqueId('c'), name: "新班级", students: [], sessions: [], attendanceData: {}, historyRecords: [] }];
         }
 
-        // === 清理历史垃圾内存，防止存不进去 ===
+        // === 强力清理历史垃圾内存，释放浏览器空间 ===
         function clearLegacyMemory() {
-            const legacyVersions = [
-                'geminiClassData_v7', 'geminiClassData_v6', 'geminiClassData_v5_5', 
-                'geminiClassData_v5_4', 'geminiClassData_v5_3', 'geminiClassData_v5_2', 
-                'geminiClassData_v5_1', 'geminiClassData_v5', 'geminiClassData_v4'
-            ];
-            legacyVersions.forEach(v => localStorage.removeItem(v));
+            const keepKeys = ['geminiClassData_v8', 'geminiActiveClassId_v8'];
+            for (let i = localStorage.length - 1; i >= 0; i--) {
+                const key = localStorage.key(i);
+                // 只要是以前的旧版本数据，且不是当前正在用的 v8，统统删掉释放空间
+                if (key && (key.startsWith('geminiClassData') || key.startsWith('geminiActiveClassId'))) {
+                    if (!keepKeys.includes(key)) {
+                        localStorage.removeItem(key);
+                    }
+                }
+            }
         }
 
         let classesData = loadInitialData();
@@ -360,8 +377,23 @@
 
         function saveData() {
             healData();
-            localStorage.setItem('geminiClassData_v8', JSON.stringify(classesData));
-            if (activeClassId) localStorage.setItem('geminiActiveClassId_v8', activeClassId);
+            try {
+                // 每次保存前顺手清一下垃圾
+                clearLegacyMemory(); 
+                const jsonStr = JSON.stringify(classesData);
+                
+                // 开启黑科技：如果引入了压缩库，就把数据压缩后再存，能省出极大空间！
+                const finalData = typeof LZString !== 'undefined' ? LZString.compressToUTF16(jsonStr) : jsonStr;
+                
+                localStorage.setItem('geminiClassData_v8', finalData);
+                if (activeClassId) localStorage.setItem('geminiActiveClassId_v8', activeClassId);
+            } catch(e) {
+                if (e.name === 'QuotaExceededError' || e.message.includes('quota')) {
+                    alert("🚨 警告：虽然已经极力压缩，但浏览器存储空间依然爆满！\n\n请立刻点击【导出数据存档(.json)】下载备份，然后手动删除页面下方陈旧的【历史课时消耗记录】来腾出空间！");
+                } else {
+                    console.error("保存出错:", e);
+                }
+            }
             renderAllClasses();
         }
 
@@ -893,18 +925,18 @@
         function commitImportedClasses(importedClasses) {
             const normalized = normalizeClassArray(importedClasses);
             if (!Array.isArray(normalized) || !normalized.length) return false;
-            try { localStorage.setItem('geminiClassData_before_import_backup', JSON.stringify(classesData || [])); } catch(e) {}
+            
             classesData = normalized;
             activeClassId = String(classesData[0].id);
             try {
-                // 同时写入多个保险箱，避免以后版本切换又读不到
-                localStorage.setItem('geminiClassData_v10', JSON.stringify(classesData));
-                localStorage.setItem('geminiClassData_v9', JSON.stringify(classesData));
-                localStorage.setItem('geminiClassData_v8', JSON.stringify(classesData));
+                // 导入新数据前，先大扫除
+                clearLegacyMemory();
+                const jsonStr = JSON.stringify(classesData);
+                const finalData = typeof LZString !== 'undefined' ? LZString.compressToUTF16(jsonStr) : jsonStr;
+                localStorage.setItem('geminiClassData_v8', finalData);
                 localStorage.setItem('geminiActiveClassId_v8', activeClassId);
-                localStorage.setItem('geminiActiveClassId_v10', activeClassId);
             } catch(e) {
-                alert('⚠️ 数据已读到，但浏览器本地存储空间可能满了。建议先导出备份，再清理浏览器缓存。');
+                alert('⚠️ 浏览器本地存储空间已达极限！即使压缩也存不下了。\n请先用记事本打开 JSON 文件，删掉一些旧的结转记录后再尝试导入。');
             }
             renderAllClasses();
             return true;
