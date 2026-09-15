@@ -2,12 +2,13 @@
 
 
 
+
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>超级班级课时管家 - 班级切换版</title>
+    <title>超级班级课时管家 - 自动排序·结班归档版</title>
     <!-- 引入强大的 LZ-String 数据压缩库，把数据体积缩小 80% -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
     <style>
@@ -33,6 +34,18 @@
         .class-tab { flex: 0 0 auto; background: #f5f5f5; color: #333; border: 1px solid #ddd; border-radius: 999px; padding: 8px 14px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .class-tab.active { background: var(--primary); color: white; border-color: var(--primary); box-shadow: 0 2px 6px rgba(76,175,80,0.35); }
         .class-tab .count { font-size: 12px; opacity: .8; margin-left: 4px; }
+        .archive-section { margin-top: 10px; padding-top: 10px; border-top: 1px dashed #ddd; }
+        .archive-section summary { cursor: pointer; color: #6d4c41; font-weight: bold; user-select: none; }
+        .archive-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+        .archive-item { display: flex; align-items: center; gap: 6px; padding: 7px 9px; background: #faf7f5; border: 1px solid #d7ccc8; border-radius: 8px; }
+        .archive-name { color: #5d4037; font-weight: bold; }
+        .archive-meta { color: #999; font-size: 11px; }
+        .btn-archive-small { background: #795548; padding: 5px 8px; font-size: 12px; }
+        .btn-restore-small { background: #4CAF50; padding: 5px 8px; font-size: 12px; }
+        .archived-card { border-top-color: #8d6e63; background: #fffdfc; }
+        .archived-banner { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; padding: 10px 12px; background: #efebe9; border: 1px solid #d7ccc8; border-radius: 8px; color: #5d4037; }
+        .archived-badge { display: inline-block; padding: 4px 9px; border-radius: 999px; background: #795548; color: #fff; font-weight: bold; font-size: 12px; }
+        .btn-return-active { background: #607D8B; }
         button { padding: 8px 14px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; color: white; transition: 0.2s; font-size: 14px; }
         button:hover { opacity: 0.9; transform: translateY(-1px); }
         .btn-global-add { background-color: var(--primary); font-size: 16px; padding: 10px 20px; }
@@ -101,6 +114,7 @@
         .btn-del-payment:hover { color: var(--danger); }
         
         .btn-rollover { background-color: #FF9800; }
+        .btn-archive-class { background-color: #795548; }
         .history-panel { margin-top: 18px; border: 1px solid #ffe0b2; background: #fffaf2; border-radius: 8px; padding: 12px; }
         .history-title { font-size: 16px; font-weight: bold; color: #e65100; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
         .history-hint { font-size: 12px; color: #777; font-weight: normal; }
@@ -124,7 +138,7 @@
 <body>
 
     <div class="global-controls">
-        <div class="global-title">🏫 宝贝课时总管家 · 班级切换版</div>
+        <div class="global-title">🏫 宝贝课时总管家 · 自动排序·结班归档版</div>
         <button class="btn-global-add" onclick="addNewClass()">➕ 新增一个班级</button>
         <div style="flex-grow: 1;"></div>
         <span style="font-size: 12px; color: #aaa; margin-right: 10px;">自动保存已开启</span>
@@ -220,7 +234,7 @@
                 }
             }
 
-            return [{ id: genUniqueId('c'), name: "新班级", students: [], sessions: [], attendanceData: {}, historyRecords: [] }];
+            return [{ id: genUniqueId('c'), name: "新班级", students: [], sessions: [], attendanceData: {}, historyRecords: [], archived: false, archivedAt: '' }];
         }
 
         // === 强力清理历史垃圾内存，释放浏览器空间 ===
@@ -323,6 +337,10 @@
                     cls.historyRecords = Array.isArray(cls.archives) ? cls.archives : (Array.isArray(cls.histories) ? cls.histories : (Array.isArray(cls.rolloverHistory) ? cls.rolloverHistory : []));
                 }
 
+                // 结班归档状态：旧备份没有这些字段时默认视为在读班级
+                cls.archived = cls.archived === true || cls.archived === 'true';
+                if (!cls.archivedAt) cls.archivedAt = '';
+
                 cls.students = cls.students.map((rawSt, sIndex) => {
                     const st = (rawSt && typeof rawSt === 'object') ? rawSt : { name: String(rawSt || '') };
                     if (!st.id) st.id = genUniqueId('st') + '_' + cIndex + '_' + sIndex;
@@ -399,7 +417,7 @@
         }
 
         function addNewClass() {
-            const newClass = { id: genUniqueId('c'), name: "新班级", students: [], sessions: [], attendanceData: {}, historyRecords: [] };
+            const newClass = { id: genUniqueId('c'), name: "新班级", students: [], sessions: [], attendanceData: {}, historyRecords: [], archived: false, archivedAt: '' };
             classesData.unshift(newClass);
             activeClassId = String(newClass.id);
             localStorage.setItem('geminiActiveClassId_v8', activeClassId);
@@ -419,23 +437,64 @@
         function renderClassSwitcher() {
             const switcher = document.getElementById('classSwitcher');
             if (!switcher) return;
+
             if (!classesData.length) {
                 switcher.innerHTML = '<div class="switcher-hint">暂无班级，点击上方“新增一个班级”开始。</div>';
                 return;
             }
-            if (!getClass(activeClassId)) {
-                activeClassId = String(classesData[0].id);
-                localStorage.setItem('geminiActiveClassId_v8', activeClassId);
+
+            const activeClasses = classesData.filter(c => !c.archived);
+            const archivedClasses = classesData.filter(c => c.archived);
+            const currentClass = getClass(activeClassId);
+            const viewingArchived = !!(currentClass && currentClass.archived);
+
+            // 正常情况下如果当前班级失效，优先跳到在读班级；没有在读班级时才看第一个归档班
+            if (!currentClass) {
+                const fallback = activeClasses[0] || archivedClasses[0] || null;
+                activeClassId = fallback ? String(fallback.id) : null;
+                if (activeClassId && fallback && !fallback.archived) {
+                    localStorage.setItem('geminiActiveClassId_v8', activeClassId);
+                }
             }
-            const options = classesData.map(c => `<option value="${c.id}" ${String(c.id) === String(activeClassId) ? 'selected' : ''}>${escapeHtml(c.name || '未命名班级')}（${c.students.length}人 / ${c.sessions.length}次课）</option>`).join('');
-            const tabs = classesData.map(c => `<button class="class-tab ${String(c.id) === String(activeClassId) ? 'active' : ''}" onclick="switchClass('${c.id}')" title="${escapeHtml(c.name || '未命名班级')}">${escapeHtml(c.name || '未命名班级')}<span class="count">${c.students.length}人</span></button>`).join('');
+
+            let options = '';
+            if (viewingArchived) {
+                options += '<option value="" selected disabled>正在查看已结班班级</option>';
+            }
+            if (activeClasses.length) {
+                options += activeClasses.map(c => `<option value="${c.id}" ${String(c.id) === String(activeClassId) ? 'selected' : ''}>${escapeHtml(c.name || '未命名班级')}（${c.students.length}人 / ${c.sessions.length}次课）</option>`).join('');
+            } else {
+                options += '<option value="" selected disabled>暂无在读班级</option>';
+            }
+
+            const tabs = activeClasses.length
+                ? activeClasses.map(c => `<button class="class-tab ${String(c.id) === String(activeClassId) ? 'active' : ''}" onclick="switchClass('${c.id}')" title="${escapeHtml(c.name || '未命名班级')}">${escapeHtml(c.name || '未命名班级')}<span class="count">${c.students.length}人</span></button>`).join('')
+                : '<span class="switcher-hint">目前没有正在上课的班级。</span>';
+
+            const archivedHtml = archivedClasses.length ? `
+                <details class="archive-section" ${viewingArchived ? 'open' : ''}>
+                    <summary>📦 已结班班级（${archivedClasses.length}）</summary>
+                    <div class="archive-list">
+                        ${archivedClasses.map(c => `
+                            <div class="archive-item">
+                                <span class="archive-name">${escapeHtml(c.name || '未命名班级')}</span>
+                                <span class="archive-meta">${c.students.length}人 / ${c.sessions.length}次课</span>
+                                <button class="btn-archive-small" onclick="viewArchivedClass('${c.id}')">👀 查看</button>
+                                <button class="btn-restore-small" onclick="restoreClass('${c.id}')">↩ 恢复</button>
+                            </div>
+                        `).join('')}
+                    </div>
+                </details>
+            ` : '';
+
             switcher.innerHTML = `
                 <div class="switcher-top">
                     <span class="switcher-label">🔄 当前录入班级：</span>
-                    <select class="class-jump-select" onchange="switchClass(this.value)">${options}</select>
-                    <span class="switcher-hint">下面只显示当前班级，录入不用再来回拖动。</span>
+                    <select class="class-jump-select" onchange="if(this.value) switchClass(this.value)">${options}</select>
+                    <span class="switcher-hint">在读班级正常显示；毕业/停课班级可收入“已结班班级”。</span>
                 </div>
                 <div class="class-tabs">${tabs}</div>
+                ${archivedHtml}
             `;
         }
 
@@ -445,29 +504,45 @@
             container.innerHTML = '';
             renderClassSwitcher();
 
-            const visibleClasses = getClass(activeClassId) ? [getClass(activeClassId)] : (classesData[0] ? [classesData[0]] : []);
+            const visibleClasses = getClass(activeClassId) ? [getClass(activeClassId)] : (classesData.find(c => !c.archived) ? [classesData.find(c => !c.archived)] : (classesData[0] ? [classesData[0]] : []));
             visibleClasses.forEach(classItem => {
                 const classCard = document.createElement('div');
-                classCard.className = 'class-card';
+                const isArchived = classItem.archived === true;
+                classCard.className = 'class-card' + (isArchived ? ' archived-card' : '');
                 
                 let classTotalSessions = classItem.sessions.length;
                 let classTotalHours = classItem.sessions.reduce((sum, session) => sum + (parseFloat(session.duration)||0), 0);
+
+                let archivedBanner = isArchived ? `
+                    <div class="archived-banner">
+                        <span class="archived-badge">📦 已结班</span>
+                        <span>该班级已从日常班级列表收起，所有学生、课时、考勤、缴费和历史记录仍完整保留。</span>
+                        ${classItem.archivedAt ? `<span style="font-size:12px; color:#8d6e63;">归档：${escapeHtml(classItem.archivedAt)}</span>` : ''}
+                    </div>
+                ` : '';
                 
-                let headerHtml = `
+                let headerHtml = archivedBanner + `
                     <div class="class-header">
-                        <input type="text" class="class-title" value="${classItem.name}" onchange="updateClassInfo('${classItem.id}', 'name', this.value)">
+                        <input type="text" class="class-title" value="${escapeHtml(classItem.name)}" ${isArchived ? 'disabled' : ''} onchange="updateClassInfo('${classItem.id}', 'name', this.value)">
                         
                         <div class="progress-container">
                             <span class="progress-label">🚩 班级整体进度：</span>
                             <span class="progress-text">已开课 ${classTotalSessions} 次，整体消耗 ${classTotalHours} 小时</span>
                         </div>
 
-                        <button class="btn-add-student" onclick="addStudent('${classItem.id}')">+ 添加宝贝</button>
-                        <button class="btn-add-session" onclick="openSessionModal('${classItem.id}')">+ 新增一次课</button>
-                        <button class="btn-export-csv" onclick="exportClassCSV('${classItem.id}')">📊 导出表格</button>
-                        <button class="btn-rollover" onclick="rolloverClass('${classItem.id}')">📚 一键结转</button>
-                        <button class="btn-clear-class" onclick="clearClassData('${classItem.id}')">🧹 清空记录</button>
-                        <button class="btn-delete-class" onclick="deleteClass('${classItem.id}')">🗑️ 删除此班</button>
+                        ${isArchived ? `
+                            <button class="btn-export-csv" onclick="exportClassCSV('${classItem.id}')">📊 导出表格</button>
+                            <button class="btn-restore-small" onclick="restoreClass('${classItem.id}')">↩ 恢复班级</button>
+                            <button class="btn-return-active" onclick="returnToActiveClasses()">← 返回在读班级</button>
+                        ` : `
+                            <button class="btn-add-student" onclick="addStudent('${classItem.id}')">+ 添加宝贝</button>
+                            <button class="btn-add-session" onclick="openSessionModal('${classItem.id}')">+ 新增一次课</button>
+                            <button class="btn-export-csv" onclick="exportClassCSV('${classItem.id}')">📊 导出表格</button>
+                            <button class="btn-rollover" onclick="rolloverClass('${classItem.id}')">📚 一键结转</button>
+                            <button class="btn-archive-class" onclick="archiveClass('${classItem.id}')">📦 结班归档</button>
+                            <button class="btn-clear-class" onclick="clearClassData('${classItem.id}')">🧹 清空记录</button>
+                            <button class="btn-delete-class" onclick="deleteClass('${classItem.id}')">🗑️ 删除此班</button>
+                        `}
                     </div>
                 `;
 
@@ -492,7 +567,7 @@
                     chunk.forEach(s => {
                         tableContent += `<th>
                             ${s.date} 
-                            <button class="btn-delete-session" onclick="deleteSession('${classItem.id}', '${s.id}')">❌</button><br>
+                            ${isArchived ? '' : `<button class="btn-delete-session" onclick="deleteSession('${classItem.id}', '${s.id}')">❌</button>`}<br>
                             <span style="font-size:12px; font-weight:normal;">(${s.duration}h)</span>
                         </th>`;
                     });
@@ -519,18 +594,17 @@
                             optionsHtml += `<option value="custom">✏️ 自定义输入...</option>`;
 
                             let hoursInputHtml = `
-                                <select id="sel_${classItem.id}_${st.id}" class="hours-input" onchange="if(this.value === 'custom') { this.style.display='none'; document.getElementById('inp_${classItem.id}_${st.id}').style.display='block'; document.getElementById('inp_${classItem.id}_${st.id}').focus(); document.getElementById('inp_${classItem.id}_${st.id}').value=''; } else { updateStudentTotal('${classItem.id}', '${st.id}', this.value); }">
+                                <select id="sel_${classItem.id}_${st.id}" class="hours-input" ${isArchived ? 'disabled' : ''} onchange="if(this.value === 'custom') { this.style.display='none'; document.getElementById('inp_${classItem.id}_${st.id}').style.display='block'; document.getElementById('inp_${classItem.id}_${st.id}').focus(); document.getElementById('inp_${classItem.id}_${st.id}').value=''; } else { updateStudentTotal('${classItem.id}', '${st.id}', this.value); }">
                                     ${optionsHtml}
                                 </select>
-                                <input type="number" id="inp_${classItem.id}_${st.id}" class="hours-input" style="display:none;" placeholder="输入数字" onblur="if(this.value) updateStudentTotal('${classItem.id}', '${st.id}', this.value); else renderAllClasses();" onkeydown="if(event.key === 'Enter') this.blur();">
+                                <input type="number" id="inp_${classItem.id}_${st.id}" class="hours-input" ${isArchived ? 'disabled' : ''} style="display:none;" placeholder="输入数字" onblur="if(this.value) updateStudentTotal('${classItem.id}', '${st.id}', this.value); else renderAllClasses();" onkeydown="if(event.key === 'Enter') this.blur();">
                             `;
 
                             tableContent += `<tr>
                                 <td>
-                                    <button class="btn-icon-sm" style="color: var(--danger);" onclick="deleteStudent('${classItem.id}', '${st.id}')" title="删除宝贝">🗑️</button>
-                                    <button class="btn-icon-sm" onclick="openPaymentModal('${classItem.id}', '${st.id}')" title="财务账本及续费记录">💰</button>
+                                    ${isArchived ? `<span title="已结班记录">📦</span> <button class="btn-icon-sm" onclick="openPaymentModal('${classItem.id}', '${st.id}')" title="查看财务账本及续费记录">💰</button>` : `<button class="btn-icon-sm" style="color: var(--danger);" onclick="deleteStudent('${classItem.id}', '${st.id}')" title="删除宝贝">🗑️</button> <button class="btn-icon-sm" onclick="openPaymentModal('${classItem.id}', '${st.id}')" title="财务账本及续费记录">💰</button>`}
                                 </td>
-                                <td><input type="text" class="student-input" value="${st.name}" onchange="updateStudentName('${classItem.id}', '${st.id}', this.value)"></td>
+                                <td><input type="text" class="student-input" value="${escapeHtml(st.name)}" ${isArchived ? 'disabled' : ''} onchange="updateStudentName('${classItem.id}', '${st.id}', this.value)"></td>
                                 <td>${hoursInputHtml}</td>
                                 <td style="font-weight:bold; color:#555;">${used}</td>
                                 <td class="${alert}" style="font-weight:bold; font-size:16px;">${remain}</td>
@@ -544,7 +618,7 @@
                                 if(cur.includes('旷课')) cls += ' absent';
 
                                 tableContent += `<td>
-                                    <select class="${cls}" onchange="updateAttendance('${classItem.id}', '${st.id}', '${s.id}', this.value)">
+                                    <select class="${cls}" ${isArchived ? 'disabled' : ''} onchange="updateAttendance('${classItem.id}', '${st.id}', '${s.id}', this.value)">
                                         <option value="">- 请选择 -</option>
                                         <option value="✅出勤" ${cur === '✅出勤' ? 'selected' : ''}>✅出勤</option>
                                         <option value="🏖️事假" ${cur === '🏖️事假' ? 'selected' : ''}>🏖️事假</option>
@@ -686,6 +760,77 @@
         }
         function closeSessionModal() { document.getElementById('sessionModal').style.display = 'none'; }
         function toggleCustomDuration() { document.getElementById('customDurationInput').style.display = document.getElementById('newSessionDuration').value === 'custom' ? 'block' : 'none'; }
+
+        // 补录旧课次时，按当前显示的 MM-DD 自动回到正确日期位置。
+        // 现有数据本身只保存 MM-DD，因此这里沿用原数据结构，保证旧 JSON 完全兼容。
+        function getSessionDateOrder(dateStr) {
+            const m = String(dateStr || '').trim().match(/^(?:\d{4}-)?(\d{1,2})-(\d{1,2})$/);
+            if (!m) return Number.MAX_SAFE_INTEGER;
+            return parseInt(m[1], 10) * 100 + parseInt(m[2], 10);
+        }
+
+        function sortSessionsByDate(cls) {
+            if (!cls || !Array.isArray(cls.sessions)) return;
+            cls.sessions = cls.sessions
+                .map((session, index) => ({ session, index }))
+                .sort((a, b) => {
+                    const diff = getSessionDateOrder(a.session.date) - getSessionDateOrder(b.session.date);
+                    return diff !== 0 ? diff : a.index - b.index;
+                })
+                .map(item => item.session);
+        }
+
+        function archiveClass(classId) {
+            const cls = getClass(classId);
+            if (!cls) return;
+            const ok = confirm(
+                `确定将【${cls.name || '未命名班级'}】设为已结班吗？\n\n` +
+                `班级不会被删除。\n所有学生、课时、考勤、缴费和历史记录都会完整保留。\n\n` +
+                `结班后会从日常班级列表中收起，可随时从“已结班班级”查看或恢复。`
+            );
+            if (!ok) return;
+
+            cls.archived = true;
+            cls.archivedAt = new Date().toLocaleString('zh-CN', { hour12: false });
+
+            const activeClasses = classesData.filter(c => !c.archived);
+            activeClassId = activeClasses.length ? String(activeClasses[0].id) : String(cls.id);
+            if (activeClasses.length) localStorage.setItem('geminiActiveClassId_v8', activeClassId);
+            else localStorage.removeItem('geminiActiveClassId_v8');
+
+            saveData();
+        }
+
+        function viewArchivedClass(classId) {
+            const cls = getClass(classId);
+            if (!cls || !cls.archived) return;
+            // 只改变当前页面查看对象，不覆盖上次的“在读班级”本地记录
+            activeClassId = String(classId);
+            renderAllClasses();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function restoreClass(classId) {
+            const cls = getClass(classId);
+            if (!cls) return;
+            const ok = confirm(`确定恢复【${cls.name || '未命名班级'}】吗？\n\n恢复后它会重新出现在正常班级列表中。`);
+            if (!ok) return;
+
+            cls.archived = false;
+            cls.archivedAt = '';
+            activeClassId = String(cls.id);
+            localStorage.setItem('geminiActiveClassId_v8', activeClassId);
+            saveData();
+        }
+
+        function returnToActiveClasses() {
+            const activeClasses = classesData.filter(c => !c.archived);
+            if (!activeClasses.length) {
+                alert('目前没有在读班级。可以恢复一个已结班班级，或新增一个班级。');
+                return;
+            }
+            switchClass(activeClasses[0].id);
+        }
         
         function confirmAddSession() {
             try {
@@ -701,6 +846,7 @@
                 const cls = getClass(currentOperateClassId);
                 if(cls) {
                     cls.sessions.push({ id: genUniqueId('s'), date: fmtDate, duration: duration });
+                    sortSessionsByDate(cls);
                     saveData(); 
                 }
                 closeSessionModal();
@@ -720,7 +866,8 @@
             if(confirm("确定彻底删除此班级吗？")) {
                 classesData = classesData.filter(c => String(c.id) !== String(id));
                 if (String(activeClassId) === String(id)) {
-                    activeClassId = classesData[0] ? String(classesData[0].id) : null;
+                    const nextActive = classesData.find(c => !c.archived) || classesData[0] || null;
+                    activeClassId = nextActive ? String(nextActive.id) : null;
                     if (activeClassId) localStorage.setItem('geminiActiveClassId_v8', activeClassId);
                     else localStorage.removeItem('geminiActiveClassId_v8');
                 }
