@@ -354,6 +354,12 @@
                     const ss = (rawSs && typeof rawSs === 'object') ? rawSs : { date: String(rawSs || '') };
                     if (!ss.id) ss.id = genUniqueId('s') + '_' + cIndex + '_' + ssIndex;
                     if (!ss.date) ss.date = ss.day || ss.lessonDate || ss.sessionDate || '';
+                    // 新版记录可能带 YYYY-MM-DD；旧版没有也完全兼容。
+                    if (!ss.fullDate && /^\d{4}-\d{1,2}-\d{1,2}$/.test(String(ss.date || ''))) {
+                        ss.fullDate = String(ss.date);
+                        const p = String(ss.date).split('-');
+                        ss.date = `${String(p[1]).padStart(2, '0')}-${String(p[2]).padStart(2, '0')}`;
+                    }
                     ss.duration = safeNumber(ss.duration ?? ss.hours ?? ss.length ?? ss.time, 0);
                     return ss;
                 });
@@ -379,6 +385,10 @@
         function healData() {
             const normalized = normalizeClassArray(classesData);
             classesData = Array.isArray(normalized) ? normalized : [];
+
+            // 关键：旧数据、导入数据、之前补到最后面的课次，也统一按日期整理。
+            sortAllClassSessions();
+
             if (classesData.length && !getClass(activeClassId)) {
                 activeClassId = String(classesData[0].id);
                 localStorage.setItem('geminiActiveClassId_v8', activeClassId);
@@ -761,10 +771,22 @@
         function closeSessionModal() { document.getElementById('sessionModal').style.display = 'none'; }
         function toggleCustomDuration() { document.getElementById('customDurationInput').style.display = document.getElementById('newSessionDuration').value === 'custom' ? 'block' : 'none'; }
 
-        // 补录旧课次时，按当前显示的 MM-DD 自动回到正确日期位置。
-        // 现有数据本身只保存 MM-DD，因此这里沿用原数据结构，保证旧 JSON 完全兼容。
-        function getSessionDateOrder(dateStr) {
-            const m = String(dateStr || '').trim().match(/^(?:\d{4}-)?(\d{1,2})-(\d{1,2})$/);
+        // ===== 课次日期自动整理 =====
+        // 新增课次会保存 fullDate（YYYY-MM-DD）；旧数据没有 fullDate 时继续用 MM-DD 排序。
+        // 这样不仅“以后补录”会插回正确位置，旧 JSON / 已经乱序的数据打开页面后也会自动整理。
+        function getSessionDateOrder(session) {
+            if (!session) return Number.MAX_SAFE_INTEGER;
+
+            // 新记录优先使用完整日期，跨年份也能正确排序。
+            const full = String(session.fullDate || '').trim();
+            if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(full)) {
+                const parts = full.split('-').map(Number);
+                return parts[0] * 10000 + parts[1] * 100 + parts[2];
+            }
+
+            // 兼容旧记录：原数据只有 MM-DD。
+            const dateStr = String(session.date || '').trim();
+            const m = dateStr.match(/^(?:\d{4}-)?(\d{1,2})-(\d{1,2})$/);
             if (!m) return Number.MAX_SAFE_INTEGER;
             return parseInt(m[1], 10) * 100 + parseInt(m[2], 10);
         }
@@ -774,10 +796,16 @@
             cls.sessions = cls.sessions
                 .map((session, index) => ({ session, index }))
                 .sort((a, b) => {
-                    const diff = getSessionDateOrder(a.session.date) - getSessionDateOrder(b.session.date);
+                    const diff = getSessionDateOrder(a.session) - getSessionDateOrder(b.session);
+                    // 同一天的多节课保持原先顺序，不会互相乱跳。
                     return diff !== 0 ? diff : a.index - b.index;
                 })
                 .map(item => item.session);
+        }
+
+        function sortAllClassSessions() {
+            if (!Array.isArray(classesData)) return;
+            classesData.forEach(cls => sortSessionsByDate(cls));
         }
 
         function archiveClass(classId) {
@@ -845,7 +873,13 @@
 
                 const cls = getClass(currentOperateClassId);
                 if(cls) {
-                    cls.sessions.push({ id: genUniqueId('s'), date: fmtDate, duration: duration });
+                    cls.sessions.push({
+                        id: genUniqueId('s'),
+                        date: fmtDate,
+                        fullDate: dateInput,
+                        duration: duration
+                    });
+                    // 新增后立刻重排；例如补录 08-28，会自动插到 08-25 与 09-01 之间。
                     sortSessionsByDate(cls);
                     saveData(); 
                 }
@@ -1075,6 +1109,8 @@
             if (!Array.isArray(normalized) || !normalized.length) return false;
             
             classesData = normalized;
+            // 导入旧备份时也立即把课次顺序整理正确。
+            sortAllClassSessions();
             activeClassId = String(classesData[0].id);
             try {
                 // 导入新数据前，先大扫除
