@@ -8,7 +8,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>超级班级课时管家 - 自动排序·结班归档版</title>
+    <title>超级班级课时管家 - 转班结算·学生归档版</title>
     <!-- 引入强大的 LZ-String 数据压缩库，把数据体积缩小 80% -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
     <style>
@@ -75,8 +75,8 @@
         th, td { border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); padding: 8px; text-align: center; box-sizing: border-box; }
         th { background-color: #f1f8e9; color: #2e7d32; font-weight: bold; position: relative;}
         
-        th:nth-child(1), td:nth-child(1) { position: sticky; left: 0; background-color: #f1f8e9; z-index: 2; width: 85px; } 
-        th:nth-child(2), td:nth-child(2) { position: sticky; left: 85px; background-color: #f1f8e9; z-index: 2; width: 150px; } 
+        th:nth-child(1), td:nth-child(1) { position: sticky; left: 0; background-color: #f1f8e9; z-index: 2; width: 128px; } 
+        th:nth-child(2), td:nth-child(2) { position: sticky; left: 128px; background-color: #f1f8e9; z-index: 2; width: 150px; } 
         th:nth-child(3), td:nth-child(3) { width: 85px; } 
         th:nth-child(4), td:nth-child(4) { width: 70px; } 
         th:nth-child(5), td:nth-child(5) { width: 70px; } 
@@ -132,13 +132,54 @@
         .history-table th, .history-table td { position: static !important; left: auto !important; width: auto !important; background: white; border: 1px solid #eee; padding: 7px; font-size: 13px; }
         .history-table th { background: #fff8e1; color: #e65100; }
 
+
+        /* ===== 学生转班 / 离班归档 ===== */
+        .modal-wide { width: 520px; max-width: calc(100vw - 40px); }
+        .student-action-btn { background: transparent; border: none; padding: 2px 4px; font-size: 16px; line-height: 1; vertical-align: middle; }
+        .student-action-btn:hover { transform: scale(1.12); opacity: 1; }
+        .student-action-transfer { color: #1976D2; }
+        .student-action-leave { color: #795548; }
+        .transfer-source-box { background: #f5f9ff; border: 1px solid #d6e8ff; border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; font-size: 13px; line-height: 1.7; }
+        .transfer-preview { background: #fafafa; border: 1px solid #e0e0e0; border-radius: 8px; padding: 12px; margin-top: 8px; font-size: 13px; }
+        .transfer-preview-title { font-weight: bold; color: #37474F; margin-bottom: 8px; }
+        .preview-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; }
+        .preview-card { border: 1px solid #e0e0e0; border-radius: 7px; background: #fff; padding: 9px; }
+        .preview-card .label { color: #777; font-size: 11px; margin-bottom: 4px; }
+        .preview-card .value { color: #263238; font-size: 16px; font-weight: bold; }
+        .preview-card.highlight { background: #e8f5e9; border-color: #a5d6a7; }
+        .preview-card.highlight .value { color: #2e7d32; }
+        .merge-note { margin-top: 9px; padding: 8px 10px; border-radius: 6px; background: #e3f2fd; color: #1565C0; line-height: 1.6; }
+        .warn-note { margin-top: 9px; padding: 8px 10px; border-radius: 6px; background: #fff3e0; color: #e65100; line-height: 1.6; }
+        .student-archive-panel { margin-top: 18px; border: 1px solid #d7ccc8; border-radius: 8px; background: #fffdfb; overflow: hidden; }
+        .student-archive-panel summary { cursor: pointer; padding: 11px 13px; font-weight: bold; color: #6d4c41; background: #efebe9; user-select: none; }
+        .student-archive-list { padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+        .student-archive-item { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; border: 1px solid #e7dfdc; border-radius: 8px; background: white; padding: 9px 10px; }
+        .student-archive-name { font-weight: bold; color: #3e2723; min-width: 100px; }
+        .student-status-badge { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: bold; }
+        .student-status-transfer { background: #e3f2fd; color: #1565C0; }
+        .student-status-left { background: #efebe9; color: #6d4c41; }
+        .student-archive-meta { color: #777; font-size: 12px; flex: 1 1 280px; }
+        .btn-student-history { background: #607D8B; font-size: 12px; padding: 5px 8px; }
+        .btn-student-restore { background: #4CAF50; font-size: 12px; padding: 5px 8px; }
+        .not-member-cell { display: inline-block; min-width: 78px; padding: 5px 4px; border-radius: 4px; background: #f5f5f5; color: #aaa; font-size: 11px; }
+        .transfer-in-tag { display: block; color: #1976D2; font-size: 10px; margin-top: 2px; white-space: normal; line-height: 1.2; }
+        .student-history-summary { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; margin-bottom: 12px; }
+        .student-history-table-wrap { max-height: 310px; overflow: auto; border: 1px solid #eee; border-radius: 6px; }
+        .student-history-table { width: 100%; border-collapse: collapse; table-layout: auto; white-space: nowrap; }
+        .student-history-table th, .student-history-table td { position: static !important; left: auto !important; width: auto !important; padding: 7px 8px; border: 1px solid #eee; font-size: 12px; background: white; }
+        .student-history-table th { background: #f5f5f5; color: #555; }
+        .empty-small { color: #999; text-align: center; padding: 15px; font-size: 12px; }
+        @media (max-width: 650px) {
+            .preview-grid, .student-history-summary { grid-template-columns: 1fr; }
+        }
+
         #jsonFileInput { display: none; }
     </style>
 </head>
 <body>
 
     <div class="global-controls">
-        <div class="global-title">🏫 宝贝课时总管家 · 自动排序·结班归档版</div>
+        <div class="global-title">🏫 宝贝课时总管家 · 转班结算·学生归档版</div>
         <button class="btn-global-add" onclick="addNewClass()">➕ 新增一个班级</button>
         <div style="flex-grow: 1;"></div>
         <span style="font-size: 12px; color: #aaa; margin-right: 10px;">自动保存已开启</span>
@@ -202,6 +243,66 @@
             <div class="modal-actions">
                 <button class="btn btn-cancel" onclick="closePaymentModal()">关闭</button>
                 <button class="btn btn-add-session" onclick="confirmAddPayment()">💾 保存并增加课时</button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- 学生转班 -->
+    <div class="modal-overlay" id="transferModal">
+        <div class="modal modal-wide">
+            <h3>🔄 学生转班</h3>
+            <div class="transfer-source-box" id="transferSourceInfo"></div>
+            <div class="modal-form-group">
+                <label>转入班级：</label>
+                <select id="transferTargetClass" onchange="refreshTransferPreview()"></select>
+            </div>
+            <div class="modal-form-group">
+                <label>转班生效日期：</label>
+                <input type="date" id="transferEffectiveDate" onchange="refreshTransferPreview()">
+            </div>
+            <div id="transferPreview" class="transfer-preview"></div>
+            <div class="modal-actions">
+                <button class="btn btn-cancel" onclick="closeTransferModal()">取消</button>
+                <button class="btn btn-add-session" onclick="confirmStudentTransfer()">确认转班</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 学生离班归档 -->
+    <div class="modal-overlay" id="leaveStudentModal">
+        <div class="modal modal-wide">
+            <h3>📦 学生离班归档</h3>
+            <div class="transfer-source-box" id="leaveStudentInfo"></div>
+            <div class="modal-form-group">
+                <label>离班生效日期：</label>
+                <input type="date" id="leaveEffectiveDate" onchange="refreshLeavePreview()">
+            </div>
+            <div class="modal-form-group">
+                <label>离班原因：</label>
+                <select id="leaveReason">
+                    <option value="毕业">毕业</option>
+                    <option value="退课">退课</option>
+                    <option value="暂停">暂停</option>
+                    <option value="转其他课程">转其他课程</option>
+                    <option value="其他">其他</option>
+                </select>
+            </div>
+            <div id="leavePreview" class="transfer-preview"></div>
+            <div class="modal-actions">
+                <button class="btn btn-cancel" onclick="closeLeaveStudentModal()">取消</button>
+                <button class="btn btn-archive-class" onclick="confirmLeaveStudent()">确认归档</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 已转班 / 已离班学生历史 -->
+    <div class="modal-overlay" id="studentHistoryModal">
+        <div class="modal modal-wide">
+            <h3>📚 学生历史记录</h3>
+            <div id="studentHistoryContent"></div>
+            <div class="modal-actions">
+                <button class="btn btn-cancel" onclick="closeStudentHistoryModal()">关闭</button>
             </div>
         </div>
     </div>
@@ -347,6 +448,16 @@
                     if (st.name === undefined || st.name === null) st.name = st.studentName || st.babyName || st.nickname || '';
                     if (!Array.isArray(st.payments)) st.payments = Array.isArray(st.paymentRecords) ? st.paymentRecords : [];
                     st.totalHours = safeNumber(st.totalHours ?? st.hours ?? st.total ?? st.remainingHours, 0);
+                    // 学生在某个班级里的状态。旧数据默认都是“在读”。
+                    if (!['active', 'transferred', 'left'].includes(st.classStatus)) st.classStatus = 'active';
+                    if (!st.joinedAt) st.joinedAt = '';
+                    if (!st.inactiveFromDate) st.inactiveFromDate = '';
+                    if (!st.exitAt) st.exitAt = '';
+                    if (!st.exitReason) st.exitReason = '';
+                    if (!st.exitToClassId) st.exitToClassId = '';
+                    if (!st.exitToClassName) st.exitToClassName = '';
+                    if (st.exitRecord && typeof st.exitRecord !== 'object') st.exitRecord = null;
+                    if (st.transferIn && typeof st.transferIn !== 'object') st.transferIn = null;
                     return st;
                 });
 
@@ -472,13 +583,13 @@
                 options += '<option value="" selected disabled>正在查看已结班班级</option>';
             }
             if (activeClasses.length) {
-                options += activeClasses.map(c => `<option value="${c.id}" ${String(c.id) === String(activeClassId) ? 'selected' : ''}>${escapeHtml(c.name || '未命名班级')}（${c.students.length}人 / ${c.sessions.length}次课）</option>`).join('');
+                options += activeClasses.map(c => `<option value="${c.id}" ${String(c.id) === String(activeClassId) ? 'selected' : ''}>${escapeHtml(c.name || '未命名班级')}（${getActiveStudents(c).length}人在读 / ${c.sessions.length}次课）</option>`).join('');
             } else {
                 options += '<option value="" selected disabled>暂无在读班级</option>';
             }
 
             const tabs = activeClasses.length
-                ? activeClasses.map(c => `<button class="class-tab ${String(c.id) === String(activeClassId) ? 'active' : ''}" onclick="switchClass('${c.id}')" title="${escapeHtml(c.name || '未命名班级')}">${escapeHtml(c.name || '未命名班级')}<span class="count">${c.students.length}人</span></button>`).join('')
+                ? activeClasses.map(c => `<button class="class-tab ${String(c.id) === String(activeClassId) ? 'active' : ''}" onclick="switchClass('${c.id}')" title="${escapeHtml(c.name || '未命名班级')}">${escapeHtml(c.name || '未命名班级')}<span class="count">${getActiveStudents(c).length}人</span></button>`).join('')
                 : '<span class="switcher-hint">目前没有正在上课的班级。</span>';
 
             const archivedHtml = archivedClasses.length ? `
@@ -488,7 +599,7 @@
                         ${archivedClasses.map(c => `
                             <div class="archive-item">
                                 <span class="archive-name">${escapeHtml(c.name || '未命名班级')}</span>
-                                <span class="archive-meta">${c.students.length}人 / ${c.sessions.length}次课</span>
+                                <span class="archive-meta">${getActiveStudents(c).length}人在读 / ${c.sessions.length}次课</span>
                                 <button class="btn-archive-small" onclick="viewArchivedClass('${c.id}')">👀 查看</button>
                                 <button class="btn-restore-small" onclick="restoreClass('${c.id}')">↩ 恢复</button>
                             </div>
@@ -518,8 +629,9 @@
             visibleClasses.forEach(classItem => {
                 const classCard = document.createElement('div');
                 const isArchived = classItem.archived === true;
+                const activeStudents = getActiveStudents(classItem);
                 classCard.className = 'class-card' + (isArchived ? ' archived-card' : '');
-                
+
                 let classTotalSessions = classItem.sessions.length;
                 let classTotalHours = classItem.sessions.reduce((sum, session) => sum + (parseFloat(session.duration)||0), 0);
 
@@ -530,14 +642,14 @@
                         ${classItem.archivedAt ? `<span style="font-size:12px; color:#8d6e63;">归档：${escapeHtml(classItem.archivedAt)}</span>` : ''}
                     </div>
                 ` : '';
-                
+
                 let headerHtml = archivedBanner + `
                     <div class="class-header">
                         <input type="text" class="class-title" value="${escapeHtml(classItem.name)}" ${isArchived ? 'disabled' : ''} onchange="updateClassInfo('${classItem.id}', 'name', this.value)">
-                        
+
                         <div class="progress-container">
                             <span class="progress-label">🚩 班级整体进度：</span>
-                            <span class="progress-text">已开课 ${classTotalSessions} 次，整体消耗 ${classTotalHours} 小时</span>
+                            <span class="progress-text">在读 ${activeStudents.length} 人｜已开课 ${classTotalSessions} 次，整体消耗 ${classTotalHours} 小时</span>
                         </div>
 
                         ${isArchived ? `
@@ -564,7 +676,7 @@
                 if (chunks.length === 0) chunks = [[]];
 
                 chunks.forEach((chunk, chunkIndex) => {
-                    let tableContent = "";
+                    let tableContent = '';
                     if (chunk.length > 0) {
                         let start = chunkIndex * SESSIONS_PER_CHUNK + 1;
                         let end = start + chunk.length - 1;
@@ -573,62 +685,67 @@
 
                     tableContent += `<div class="table-container"><table><thead><tr>`;
                     tableContent += `<th>操作</th><th>宝贝姓名</th><th>总课时</th><th>已消</th><th>剩余</th>`;
-                    
+
                     chunk.forEach(s => {
                         tableContent += `<th>
-                            ${s.date} 
+                            ${s.date}
                             ${isArchived ? '' : `<button class="btn-delete-session" onclick="deleteSession('${classItem.id}', '${s.id}')">❌</button>`}<br>
                             <span style="font-size:12px; font-weight:normal;">(${s.duration}h)</span>
                         </th>`;
                     });
-                    
                     tableContent += `</tr></thead><tbody>`;
 
-                    if (classItem.students.length === 0) {
-                        tableContent += `<tr><td colspan="${5 + chunk.length}" style="text-align:center; color:#999; padding:15px;">还没有添加宝贝哦</td></tr>`;
+                    if (activeStudents.length === 0) {
+                        tableContent += `<tr><td colspan="${5 + chunk.length}" style="text-align:center; color:#999; padding:15px;">当前没有在读宝贝；已转班 / 已离班学生可在下方归档区查看。</td></tr>`;
                     } else {
-                        classItem.students.forEach(st => {
-                            let used = 0;
-                            classItem.sessions.forEach(s => {
-                                const status = classItem.attendanceData[`${st.id}_${s.id}`] || '';
-                                if (status === '✅出勤' || status === '❌旷课' || status === '🔄补课') used += (parseFloat(s.duration)||0);
-                            });
-                            let remain = st.totalHours - used;
-                            let alert = remain < 5 ? 'alert-text' : '';
+                        activeStudents.forEach(st => {
+                            const usage = calculateStudentUsage(classItem, st);
+                            const used = usage.used;
+                            const remain = roundHours((parseFloat(st.totalHours) || 0) - used);
+                            const alert = remain < 5 ? 'alert-text' : '';
 
-                            const presetHours = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50];
+                            const presetHours = [5,10,15,20,25,30,35,40,45,50];
                             let optionsHtml = '';
                             let isCustom = !presetHours.includes(Number(st.totalHours));
                             presetHours.forEach(h => { optionsHtml += `<option value="${h}" ${st.totalHours == h ? 'selected' : ''}>${h}</option>`; });
-                            if (isCustom) { optionsHtml += `<option value="${st.totalHours}" selected>${st.totalHours}</option>`; }
+                            if (isCustom) optionsHtml += `<option value="${st.totalHours}" selected>${st.totalHours}</option>`;
                             optionsHtml += `<option value="custom">✏️ 自定义输入...</option>`;
 
-                            let hoursInputHtml = `
-                                <select id="sel_${classItem.id}_${st.id}" class="hours-input" ${isArchived ? 'disabled' : ''} onchange="if(this.value === 'custom') { this.style.display='none'; document.getElementById('inp_${classItem.id}_${st.id}').style.display='block'; document.getElementById('inp_${classItem.id}_${st.id}').focus(); document.getElementById('inp_${classItem.id}_${st.id}').value=''; } else { updateStudentTotal('${classItem.id}', '${st.id}', this.value); }">
-                                    ${optionsHtml}
-                                </select>
-                                <input type="number" id="inp_${classItem.id}_${st.id}" class="hours-input" ${isArchived ? 'disabled' : ''} style="display:none;" placeholder="输入数字" onblur="if(this.value) updateStudentTotal('${classItem.id}', '${st.id}', this.value); else renderAllClasses();" onkeydown="if(event.key === 'Enter') this.blur();">
-                            `;
+                            const hoursInputHtml = isArchived
+                                ? `<span>${st.totalHours}</span>`
+                                : `<select id="sel_${classItem.id}_${st.id}" class="hours-input" onchange="if(this.value === 'custom') { this.style.display='none'; document.getElementById('inp_${classItem.id}_${st.id}').style.display='block'; document.getElementById('inp_${classItem.id}_${st.id}').focus(); document.getElementById('inp_${classItem.id}_${st.id}').value=''; } else { updateStudentTotal('${classItem.id}', '${st.id}', this.value); }">${optionsHtml}</select>
+                                   <input type="number" id="inp_${classItem.id}_${st.id}" class="hours-input" style="display:none;" placeholder="输入数字" onblur="if(this.value) updateStudentTotal('${classItem.id}', '${st.id}', this.value); else renderAllClasses();" onkeydown="if(event.key === 'Enter') this.blur();">`;
 
                             tableContent += `<tr>
                                 <td>
-                                    ${isArchived ? `<span title="已结班记录">📦</span> <button class="btn-icon-sm" onclick="openPaymentModal('${classItem.id}', '${st.id}')" title="查看财务账本及续费记录">💰</button>` : `<button class="btn-icon-sm" style="color: var(--danger);" onclick="deleteStudent('${classItem.id}', '${st.id}')" title="删除宝贝">🗑️</button> <button class="btn-icon-sm" onclick="openPaymentModal('${classItem.id}', '${st.id}')" title="财务账本及续费记录">💰</button>`}
+                                    ${isArchived ? `<span title="已结班记录">📦</span> <button class="btn-icon-sm" onclick="openPaymentModal('${classItem.id}', '${st.id}')" title="查看财务账本及续费记录">💰</button>` : `
+                                        <button class="student-action-btn" style="color:var(--danger);" onclick="deleteStudent('${classItem.id}', '${st.id}')" title="删除宝贝">🗑️</button>
+                                        <button class="student-action-btn" onclick="openPaymentModal('${classItem.id}', '${st.id}')" title="财务账本及续费记录">💰</button>
+                                        <button class="student-action-btn student-action-transfer" onclick="openTransferModal('${classItem.id}', '${st.id}')" title="转班">🔄</button>
+                                        <button class="student-action-btn student-action-leave" onclick="openLeaveStudentModal('${classItem.id}', '${st.id}')" title="离班归档">📦</button>
+                                    `}
                                 </td>
-                                <td><input type="text" class="student-input" value="${escapeHtml(st.name)}" ${isArchived ? 'disabled' : ''} onchange="updateStudentName('${classItem.id}', '${st.id}', this.value)"></td>
+                                <td>
+                                    <input type="text" class="student-input" value="${escapeHtml(st.name)}" ${isArchived ? 'disabled' : ''} onchange="updateStudentName('${classItem.id}', '${st.id}', this.value)">
+                                    ${st.transferIn ? `<span class="transfer-in-tag">由 ${escapeHtml(st.transferIn.fromClassName || '其他班')} 转入 · ${escapeHtml(st.transferIn.effectiveDate || '')}</span>` : ''}
+                                </td>
                                 <td>${hoursInputHtml}</td>
                                 <td style="font-weight:bold; color:#555;">${used}</td>
                                 <td class="${alert}" style="font-weight:bold; font-size:16px;">${remain}</td>
                             `;
 
                             chunk.forEach(s => {
+                                if (!isSessionInStudentMembership(st, s)) {
+                                    tableContent += `<td><span class="not-member-cell">— 未加入 —</span></td>`;
+                                    return;
+                                }
                                 const cur = classItem.attendanceData[`${st.id}_${s.id}`] || '';
-                                let cls = 'status-select';
-                                if(cur.includes('出勤')) cls += ' attended';
-                                if(cur.includes('假')) cls += ' leave';
-                                if(cur.includes('旷课')) cls += ' absent';
-
+                                let statusCls = 'status-select';
+                                if(cur.includes('出勤')) statusCls += ' attended';
+                                if(cur.includes('假')) statusCls += ' leave';
+                                if(cur.includes('旷课')) statusCls += ' absent';
                                 tableContent += `<td>
-                                    <select class="${cls}" ${isArchived ? 'disabled' : ''} onchange="updateAttendance('${classItem.id}', '${st.id}', '${s.id}', this.value)">
+                                    <select class="${statusCls}" ${isArchived ? 'disabled' : ''} onchange="updateAttendance('${classItem.id}', '${st.id}', '${s.id}', this.value)">
                                         <option value="">- 请选择 -</option>
                                         <option value="✅出勤" ${cur === '✅出勤' ? 'selected' : ''}>✅出勤</option>
                                         <option value="🏖️事假" ${cur === '🏖️事假' ? 'selected' : ''}>🏖️事假</option>
@@ -645,6 +762,7 @@
                     headerHtml += tableContent;
                 });
 
+                headerHtml += renderArchivedStudentsPanel(classItem, isArchived);
                 headerHtml += renderHistoryPanel(classItem);
                 classCard.innerHTML = headerHtml;
                 container.appendChild(classCard);
@@ -654,25 +772,29 @@
 
         function calculateClassSummary(cls) {
             const sessions = Array.isArray(cls.sessions) ? cls.sessions : [];
-            const students = Array.isArray(cls.students) ? cls.students : [];
+            const students = getActiveStudents(cls);
             const classTotalHours = sessions.reduce((sum, session) => sum + (parseFloat(session.duration)||0), 0);
             const dateRange = sessions.length ? `${sessions[0].date || '未填日期'} ~ ${sessions[sessions.length - 1].date || '未填日期'}` : '暂无日期';
             const rows = students.map(st => {
-                let used = 0, attended = 0, leave = 0, absent = 0, makeup = 0, empty = 0;
-                sessions.forEach(ss => {
-                    const status = cls.attendanceData[`${st.id}_${ss.id}`] || '';
-                    if (status === '✅出勤') { used += (parseFloat(ss.duration)||0); attended++; }
-                    else if (status === '❌旷课') { used += (parseFloat(ss.duration)||0); absent++; }
-                    else if (status === '🔄补课') { used += (parseFloat(ss.duration)||0); makeup++; }
-                    else if (status === '🏖️事假' || status === '🤒病假') { leave++; }
-                    else { empty++; }
-                });
+                const usage = calculateStudentUsage(cls, st);
                 const total = parseFloat(st.totalHours) || 0;
-                const remain = +(total - used).toFixed(2);
-                return { studentId: st.id, name: st.name || '未命名宝贝', beforeTotal: total, used: +used.toFixed(2), remain, attended, leave, absent, makeup, empty };
+                const remain = roundHours(total - usage.used);
+                return {
+                    studentId: st.id,
+                    name: st.name || '未命名宝贝',
+                    beforeTotal: total,
+                    used: usage.used,
+                    remain,
+                    attended: usage.attended,
+                    leave: usage.leave,
+                    absent: usage.absent,
+                    makeup: usage.makeup,
+                    empty: usage.empty
+                };
             });
-            return { id: genUniqueId('his'), createdAt: new Date().toLocaleString('zh-CN', { hour12: false }), title: `结转记录 ${getToday()}`, dateRange, sessionCount: sessions.length, classTotalHours: +classTotalHours.toFixed(2), rows };
+            return { id: genUniqueId('his'), createdAt: new Date().toLocaleString('zh-CN', { hour12: false }), title: `结转记录 ${getToday()}`, dateRange, sessionCount: sessions.length, classTotalHours: roundHours(classTotalHours), rows };
         }
+
 
         function renderHistoryPanel(cls) {
             const records = Array.isArray(cls.historyRecords) ? cls.historyRecords : [];
@@ -860,6 +982,424 @@
             switchClass(activeClasses[0].id);
         }
         
+
+        // ===== 学生在班状态 / 转班结算 =====
+        let currentTransferClassId = null;
+        let currentTransferStudentId = null;
+        let currentLeaveClassId = null;
+        let currentLeaveStudentId = null;
+
+        function isStudentActive(st) {
+            return !!st && st.classStatus !== 'transferred' && st.classStatus !== 'left';
+        }
+
+        function getActiveStudents(cls) {
+            return cls && Array.isArray(cls.students) ? cls.students.filter(isStudentActive) : [];
+        }
+
+        function getArchivedStudents(cls) {
+            return cls && Array.isArray(cls.students) ? cls.students.filter(st => !isStudentActive(st)) : [];
+        }
+
+        function normalizeStudentName(name) {
+            return String(name || '').trim().replace(/\s+/g, '').toLowerCase();
+        }
+
+        function dateStringToKey(dateStr) {
+            const s = String(dateStr || '').trim();
+            let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+            if (m) return Number(m[1]) * 10000 + Number(m[2]) * 100 + Number(m[3]);
+            m = s.match(/^(\d{1,2})-(\d{1,2})$/);
+            if (m) return Number(m[1]) * 100 + Number(m[2]);
+            return null;
+        }
+
+        function getSessionDateKeyForBoundary(session, boundaryDate) {
+            if (!session) return null;
+            const full = String(session.fullDate || '').trim();
+            const fullKey = dateStringToKey(full);
+            if (fullKey !== null && full.length >= 8) return fullKey;
+
+            const raw = String(session.date || '').trim();
+            const rawFull = dateStringToKey(raw);
+            if (rawFull !== null && /^\d{4}-/.test(raw)) return rawFull;
+
+            const md = raw.match(/^(\d{1,2})-(\d{1,2})$/);
+            if (!md) return null;
+            const boundary = String(boundaryDate || '').match(/^(\d{4})-/);
+            if (boundary) return Number(boundary[1]) * 10000 + Number(md[1]) * 100 + Number(md[2]);
+            return Number(md[1]) * 100 + Number(md[2]);
+        }
+
+        function sessionIsInRange(session, fromInclusive, toExclusive) {
+            const ref = fromInclusive || toExclusive || '';
+            const key = getSessionDateKeyForBoundary(session, ref);
+            if (key === null) return true;
+            if (fromInclusive) {
+                const fromKey = dateStringToKey(fromInclusive);
+                if (fromKey !== null && key < fromKey) return false;
+            }
+            if (toExclusive) {
+                const toKey = dateStringToKey(toExclusive);
+                if (toKey !== null && key >= toKey) return false;
+            }
+            return true;
+        }
+
+        function isSessionInStudentMembership(st, session) {
+            if (!st) return false;
+            return sessionIsInRange(session, st.joinedAt || '', st.inactiveFromDate || '');
+        }
+
+        function isChargeStatus(status) {
+            return status === '✅出勤' || status === '❌旷课' || status === '🔄补课';
+        }
+
+        function roundHours(n) {
+            return Math.round((Number(n) || 0) * 100) / 100;
+        }
+
+        function calculateStudentUsage(cls, st, fromInclusive = '', toExclusive = '') {
+            let used = 0, billedCount = 0, attended = 0, leave = 0, absent = 0, makeup = 0, empty = 0;
+            const rows = [];
+            if (!cls || !st) return { used, billedCount, attended, leave, absent, makeup, empty, rows };
+
+            (cls.sessions || []).forEach(ss => {
+                if (!sessionIsInRange(ss, fromInclusive || st.joinedAt || '', toExclusive || st.inactiveFromDate || '')) return;
+                // 当调用方没有覆盖范围时，再尊重学生自身完整的加入/离开窗口。
+                if (!fromInclusive && !toExclusive && !isSessionInStudentMembership(st, ss)) return;
+
+                const status = cls.attendanceData[`${st.id}_${ss.id}`] || '';
+                const duration = parseFloat(ss.duration) || 0;
+                if (status === '✅出勤') { used += duration; billedCount++; attended++; }
+                else if (status === '❌旷课') { used += duration; billedCount++; absent++; }
+                else if (status === '🔄补课') { used += duration; billedCount++; makeup++; }
+                else if (status === '🏖️事假' || status === '🤒病假') { leave++; }
+                else { empty++; }
+                rows.push({ sessionId: ss.id, date: ss.fullDate || ss.date || '', displayDate: ss.date || ss.fullDate || '', duration, status });
+            });
+            return { used: roundHours(used), billedCount, attended, leave, absent, makeup, empty, rows };
+        }
+
+        function paymentDateOnOrAfter(payment, date) {
+            if (!payment || !payment.date || !date) return false;
+            const a = dateStringToKey(payment.date);
+            const b = dateStringToKey(date);
+            return a !== null && b !== null && a >= b;
+        }
+
+        function sumPaymentHours(payments) {
+            return roundHours((payments || []).reduce((sum, p) => sum + (parseFloat(p.hours) || 0), 0));
+        }
+
+        function findActiveSameNameStudent(cls, name) {
+            const n = normalizeStudentName(name);
+            if (!cls || !n) return null;
+            return (cls.students || []).find(st => isStudentActive(st) && normalizeStudentName(st.name) === n) || null;
+        }
+
+        function calculateTransferPlan(sourceCls, sourceSt, targetCls, effectiveDate) {
+            const sourceFuturePayments = (sourceSt.payments || []).filter(p => paymentDateOnOrAfter(p, effectiveDate));
+            const movedPaymentHours = sumPaymentHours(sourceFuturePayments);
+            const sourceTotalAtTransfer = roundHours(Math.max(0, (parseFloat(sourceSt.totalHours) || 0) - movedPaymentHours));
+            const sourceUsage = calculateStudentUsage(sourceCls, sourceSt, sourceSt.joinedAt || '', effectiveDate);
+            const transferBalance = roundHours(sourceTotalAtTransfer - sourceUsage.used);
+
+            const targetSt = findActiveSameNameStudent(targetCls, sourceSt.name);
+            let targetUsage = { used: 0, billedCount: 0, rows: [] };
+            let targetExistingPaymentHours = 0;
+            if (targetSt) {
+                targetUsage = calculateStudentUsage(targetCls, targetSt, effectiveDate, '');
+                targetExistingPaymentHours = sumPaymentHours((targetSt.payments || []).filter(p => paymentDateOnOrAfter(p, effectiveDate)));
+            }
+            const targetTotalAfterTransfer = roundHours(transferBalance + targetExistingPaymentHours + movedPaymentHours);
+            const currentActualRemain = roundHours(targetTotalAfterTransfer - targetUsage.used);
+
+            return {
+                sourceFuturePayments, movedPaymentHours, sourceTotalAtTransfer, sourceUsage, transferBalance,
+                targetSt, targetUsage, targetExistingPaymentHours, targetTotalAfterTransfer, currentActualRemain
+            };
+        }
+
+        function createExitRecord(cls, st, effectiveDate, type, extra = {}) {
+            const usage = calculateStudentUsage(cls, st, st.joinedAt || '', effectiveDate);
+            const rows = usage.rows.map(r => ({ ...r }));
+            return {
+                id: genUniqueId('exit'),
+                type,
+                sourceClassId: cls.id,
+                sourceClassName: cls.name || '未命名班级',
+                studentName: st.name || '未命名宝贝',
+                effectiveDate,
+                createdAt: new Date().toLocaleString('zh-CN', { hour12: false }),
+                totalHours: roundHours(parseFloat(st.totalHours) || 0),
+                usedHours: usage.used,
+                remainingHours: roundHours((parseFloat(st.totalHours) || 0) - usage.used),
+                sessions: rows,
+                payments: JSON.parse(JSON.stringify(st.payments || [])),
+                ...extra
+            };
+        }
+
+        function openTransferModal(classId, studentId) {
+            const sourceCls = getClass(classId);
+            const st = getStudent(classId, studentId);
+            if (!sourceCls || !st || !isStudentActive(st)) return;
+            const targets = classesData.filter(c => !c.archived && String(c.id) !== String(classId));
+            if (!targets.length) {
+                alert('目前没有其他在读班级可供转入。请先新增或恢复目标班级。');
+                return;
+            }
+            currentTransferClassId = classId;
+            currentTransferStudentId = studentId;
+            document.getElementById('transferSourceInfo').innerHTML = `学生：<b>${escapeHtml(st.name || '未命名宝贝')}</b><br>原班级：<b>${escapeHtml(sourceCls.name || '未命名班级')}</b>`;
+            document.getElementById('transferTargetClass').innerHTML = targets.map(c => `<option value="${c.id}">${escapeHtml(c.name || '未命名班级')}</option>`).join('');
+            document.getElementById('transferEffectiveDate').value = getToday();
+            document.getElementById('transferModal').style.display = 'flex';
+            refreshTransferPreview();
+        }
+
+        function closeTransferModal() {
+            document.getElementById('transferModal').style.display = 'none';
+            currentTransferClassId = null;
+            currentTransferStudentId = null;
+        }
+
+        function refreshTransferPreview() {
+            const box = document.getElementById('transferPreview');
+            const sourceCls = getClass(currentTransferClassId);
+            const sourceSt = getStudent(currentTransferClassId, currentTransferStudentId);
+            const targetId = document.getElementById('transferTargetClass').value;
+            const effectiveDate = document.getElementById('transferEffectiveDate').value;
+            const targetCls = getClass(targetId);
+            if (!sourceCls || !sourceSt || !targetCls || !effectiveDate) {
+                box.innerHTML = '<div class="empty-small">请选择目标班级和转班日期。</div>';
+                return;
+            }
+            const plan = calculateTransferPlan(sourceCls, sourceSt, targetCls, effectiveDate);
+            const targetName = escapeHtml(targetCls.name || '未命名班级');
+            const merge = plan.targetSt;
+            box.innerHTML = `
+                <div class="transfer-preview-title">📌 转班预结算</div>
+                <div class="preview-grid">
+                    <div class="preview-card"><div class="label">原班截至转班日前已消</div><div class="value">${plan.sourceUsage.used}h</div></div>
+                    <div class="preview-card"><div class="label">转班时结余</div><div class="value">${plan.transferBalance}h</div></div>
+                    <div class="preview-card"><div class="label">${targetName} 转入后已消</div><div class="value">${plan.targetUsage.used}h / ${plan.targetUsage.billedCount}次</div></div>
+                    <div class="preview-card highlight"><div class="label">当前实际剩余</div><div class="value">${plan.currentActualRemain}h</div></div>
+                </div>
+                ${merge ? `<div class="merge-note">✅ 检测到目标班已经有同名学生 <b>${escapeHtml(merge.name)}</b>。确认后会直接合并，不会再创建第二个学生；目标班已经录入的 ${plan.targetUsage.billedCount} 次计费课记录会保留。</div>` : `<div class="merge-note">ℹ️ 目标班暂未检测到同名在读学生。确认后会自动创建并从转班日期开始计算。</div>`}
+                ${plan.movedPaymentHours > 0 ? `<div class="warn-note">💰 原班在转班日期当日及之后还有 ${plan.movedPaymentHours}h 的缴费课时记录。确认转班后，这些缴费记录会一起移动到 ${targetName}，避免重复或漏算。</div>` : ''}
+                <div style="margin-top:8px;color:#777;font-size:11px;line-height:1.5;">规则：原班只计算转班生效日前的课次；目标班只计算生效日当天及之后的课次。出勤 / 补课 / 旷课计入消耗，请假不扣课时。</div>
+            `;
+        }
+
+        function confirmStudentTransfer() {
+            const sourceCls = getClass(currentTransferClassId);
+            const sourceSt = getStudent(currentTransferClassId, currentTransferStudentId);
+            const targetCls = getClass(document.getElementById('transferTargetClass').value);
+            const effectiveDate = document.getElementById('transferEffectiveDate').value;
+            if (!sourceCls || !sourceSt || !targetCls || !effectiveDate) return alert('请把转班信息填写完整。');
+
+            const plan = calculateTransferPlan(sourceCls, sourceSt, targetCls, effectiveDate);
+            const ok = confirm(`确认将【${sourceSt.name || '未命名宝贝'}】从【${sourceCls.name}】转到【${targetCls.name}】吗？\n\n转班日期：${effectiveDate}\n转班时结余：${plan.transferBalance}h\n目标班已消：${plan.targetUsage.used}h\n当前实际剩余：${plan.currentActualRemain}h`);
+            if (!ok) return;
+
+            // 保存原班离开快照，保证以后即使班级结转/清空当前课次，也还能回看转班前记录。
+            const exitRecord = createExitRecord(sourceCls, sourceSt, effectiveDate, 'transferred', {
+                targetClassId: targetCls.id,
+                targetClassName: targetCls.name || '未命名班级',
+                totalHoursAtTransfer: plan.sourceTotalAtTransfer,
+                usedHours: plan.sourceUsage.used,
+                remainingHours: plan.transferBalance,
+                movedPaymentHours: plan.movedPaymentHours
+            });
+
+            // 转班日及之后如果有原班缴费记录，移动到目标班。
+            const movedPayments = plan.sourceFuturePayments.map(p => ({ ...p }));
+            sourceSt.payments = (sourceSt.payments || []).filter(p => !paymentDateOnOrAfter(p, effectiveDate));
+            sourceSt.totalHours = plan.sourceTotalAtTransfer;
+            sourceSt.classStatus = 'transferred';
+            sourceSt.inactiveFromDate = effectiveDate;
+            sourceSt.exitAt = new Date().toLocaleString('zh-CN', { hour12: false });
+            sourceSt.exitReason = '转班';
+            sourceSt.exitToClassId = targetCls.id;
+            sourceSt.exitToClassName = targetCls.name || '';
+            sourceSt.exitRecord = exitRecord;
+
+            let targetSt = plan.targetSt;
+            if (!targetSt) {
+                targetSt = {
+                    id: genUniqueId('st'),
+                    name: sourceSt.name,
+                    totalHours: 0,
+                    payments: [],
+                    classStatus: 'active',
+                    joinedAt: effectiveDate,
+                    inactiveFromDate: '',
+                    transferIn: null
+                };
+                targetCls.students.push(targetSt);
+            }
+            targetSt.classStatus = 'active';
+            targetSt.joinedAt = effectiveDate;
+            targetSt.inactiveFromDate = '';
+            targetSt.transferIn = {
+                fromClassId: sourceCls.id,
+                fromClassName: sourceCls.name || '',
+                effectiveDate,
+                openingBalance: plan.transferBalance,
+                linkedSourceStudentId: sourceSt.id
+            };
+
+            // 合并移动过来的缴费记录（按 id 去重）。
+            if (!Array.isArray(targetSt.payments)) targetSt.payments = [];
+            const existingPayIds = new Set(targetSt.payments.map(p => String(p.id)));
+            movedPayments.forEach(p => { if (!existingPayIds.has(String(p.id))) targetSt.payments.push(p); });
+
+            const targetPostPaymentHours = sumPaymentHours((targetSt.payments || []).filter(p => paymentDateOnOrAfter(p, effectiveDate)));
+            targetSt.totalHours = roundHours(plan.transferBalance + targetPostPaymentHours);
+
+            saveData();
+            closeTransferModal();
+            alert(`✅ 转班完成！\n\n${sourceSt.name || '学生'} 已从 ${sourceCls.name} 收入“已转班学生”。\n${targetCls.name} 会从 ${effectiveDate} 开始计算；目前实际剩余 ${roundHours(targetSt.totalHours - calculateStudentUsage(targetCls, targetSt).used)}h。`);
+        }
+
+        function openLeaveStudentModal(classId, studentId) {
+            const cls = getClass(classId);
+            const st = getStudent(classId, studentId);
+            if (!cls || !st || !isStudentActive(st)) return;
+            currentLeaveClassId = classId;
+            currentLeaveStudentId = studentId;
+            document.getElementById('leaveStudentInfo').innerHTML = `学生：<b>${escapeHtml(st.name || '未命名宝贝')}</b><br>班级：<b>${escapeHtml(cls.name || '未命名班级')}</b>`;
+            document.getElementById('leaveEffectiveDate').value = getToday();
+            document.getElementById('leaveStudentModal').style.display = 'flex';
+            refreshLeavePreview();
+        }
+
+        function closeLeaveStudentModal() {
+            document.getElementById('leaveStudentModal').style.display = 'none';
+            currentLeaveClassId = null;
+            currentLeaveStudentId = null;
+        }
+
+        function refreshLeavePreview() {
+            const cls = getClass(currentLeaveClassId);
+            const st = getStudent(currentLeaveClassId, currentLeaveStudentId);
+            const date = document.getElementById('leaveEffectiveDate').value;
+            const box = document.getElementById('leavePreview');
+            if (!cls || !st || !date) { box.innerHTML = '<div class="empty-small">请选择离班日期。</div>'; return; }
+            const usage = calculateStudentUsage(cls, st, st.joinedAt || '', date);
+            const remain = roundHours((parseFloat(st.totalHours) || 0) - usage.used);
+            box.innerHTML = `
+                <div class="transfer-preview-title">📌 离班预结算</div>
+                <div class="preview-grid">
+                    <div class="preview-card"><div class="label">截至离班日前已消</div><div class="value">${usage.used}h</div></div>
+                    <div class="preview-card highlight"><div class="label">离班时剩余</div><div class="value">${remain}h</div></div>
+                </div>
+                <div style="margin-top:8px;color:#777;font-size:11px;">离班生效日当天及之后的本班课次不再参与该学生的课时计算，原有历史会完整保留。</div>
+            `;
+        }
+
+        function confirmLeaveStudent() {
+            const cls = getClass(currentLeaveClassId);
+            const st = getStudent(currentLeaveClassId, currentLeaveStudentId);
+            const date = document.getElementById('leaveEffectiveDate').value;
+            const reason = document.getElementById('leaveReason').value || '其他';
+            if (!cls || !st || !date) return alert('请填写离班日期。');
+            const usage = calculateStudentUsage(cls, st, st.joinedAt || '', date);
+            const remain = roundHours((parseFloat(st.totalHours) || 0) - usage.used);
+            if (!confirm(`确认将【${st.name || '未命名宝贝'}】收入离班归档吗？\n\n原因：${reason}\n生效日期：${date}\n离班时剩余：${remain}h\n\n记录不会删除。`)) return;
+
+            st.classStatus = 'left';
+            st.inactiveFromDate = date;
+            st.exitAt = new Date().toLocaleString('zh-CN', { hour12: false });
+            st.exitReason = reason;
+            st.exitToClassId = '';
+            st.exitToClassName = '';
+            st.exitRecord = createExitRecord(cls, st, date, 'left', { reason, remainingHours: remain });
+            saveData();
+            closeLeaveStudentModal();
+            alert('✅ 已收入“已转班 / 已离班学生”，历史记录仍然保留。');
+        }
+
+        function restoreStudentInClass(classId, studentId) {
+            const cls = getClass(classId);
+            const st = getStudent(classId, studentId);
+            if (!cls || !st || isStudentActive(st)) return;
+            const extra = st.classStatus === 'transferred' && st.exitToClassName
+                ? `\n\n注意：这只会恢复原班中的学生，不会删除【${st.exitToClassName}】里已经存在的学生和考勤。`
+                : '';
+            if (!confirm(`确定把【${st.name || '未命名宝贝'}】恢复为本班在读学生吗？${extra}`)) return;
+            st.classStatus = 'active';
+            st.inactiveFromDate = '';
+            st.exitAt = '';
+            st.exitReason = '';
+            st.exitToClassId = '';
+            st.exitToClassName = '';
+            // 保留 exitRecord 作为历史痕迹；再次转班时会更新。
+            saveData();
+        }
+
+        function openStudentHistoryModal(classId, studentId) {
+            const cls = getClass(classId);
+            const st = getStudent(classId, studentId);
+            if (!cls || !st) return;
+            const rec = st.exitRecord || createExitRecord(cls, st, st.inactiveFromDate || getToday(), st.classStatus || 'left');
+            const statusText = st.classStatus === 'transferred' ? `已转班 → ${escapeHtml(st.exitToClassName || rec.targetClassName || '其他班级')}` : `已离班 · ${escapeHtml(st.exitReason || rec.reason || '')}`;
+            const rows = rec.sessions || [];
+            const paymentRows = rec.payments || [];
+            const content = document.getElementById('studentHistoryContent');
+            content.innerHTML = `
+                <div class="transfer-source-box"><b>${escapeHtml(st.name || rec.studentName || '未命名宝贝')}</b><br>${statusText}<br>生效日期：${escapeHtml(st.inactiveFromDate || rec.effectiveDate || '')}</div>
+                <div class="student-history-summary">
+                    <div class="preview-card"><div class="label">记录时总课时</div><div class="value">${rec.totalHoursAtTransfer ?? rec.totalHours ?? 0}h</div></div>
+                    <div class="preview-card"><div class="label">离开前已消</div><div class="value">${rec.usedHours ?? 0}h</div></div>
+                    <div class="preview-card highlight"><div class="label">离开时结余</div><div class="value">${rec.remainingHours ?? 0}h</div></div>
+                    <div class="preview-card"><div class="label">历史课次</div><div class="value">${rows.length}次</div></div>
+                </div>
+                <div style="font-weight:bold;margin:8px 0;">课次记录</div>
+                <div class="student-history-table-wrap">
+                    ${rows.length ? `<table class="student-history-table"><thead><tr><th>日期</th><th>时长</th><th>状态</th></tr></thead><tbody>${rows.map(r => `<tr><td>${escapeHtml(r.displayDate || r.date || '')}</td><td>${r.duration || 0}h</td><td>${escapeHtml(r.status || '未填')}</td></tr>`).join('')}</tbody></table>` : '<div class="empty-small">暂无课次记录</div>'}
+                </div>
+                <div style="font-weight:bold;margin:12px 0 8px;">缴费记录</div>
+                <div class="student-history-table-wrap" style="max-height:180px;">
+                    ${paymentRows.length ? `<table class="student-history-table"><thead><tr><th>日期</th><th>课时</th><th>说明</th></tr></thead><tbody>${paymentRows.map(p => `<tr><td>${escapeHtml(p.date || '')}</td><td>${p.hours || 0}h</td><td>${escapeHtml(p.note || '')}</td></tr>`).join('')}</tbody></table>` : '<div class="empty-small">暂无缴费记录</div>'}
+                </div>
+            `;
+            document.getElementById('studentHistoryModal').style.display = 'flex';
+        }
+
+        function closeStudentHistoryModal() {
+            document.getElementById('studentHistoryModal').style.display = 'none';
+        }
+
+        function renderArchivedStudentsPanel(cls, isClassArchived) {
+            const archived = getArchivedStudents(cls);
+            if (!archived.length) return '';
+            return `
+                <details class="student-archive-panel">
+                    <summary>📦 已转班 / 已离班学生（${archived.length}）</summary>
+                    <div class="student-archive-list">
+                        ${archived.map(st => {
+                            const isTransfer = st.classStatus === 'transferred';
+                            const rec = st.exitRecord || {};
+                            const remain = rec.remainingHours ?? '';
+                            const meta = isTransfer
+                                ? `生效：${escapeHtml(st.inactiveFromDate || '')} ｜ 转至：${escapeHtml(st.exitToClassName || '其他班级')} ｜ 转班结余：${remain === '' ? '-' : remain + 'h'}`
+                                : `生效：${escapeHtml(st.inactiveFromDate || '')} ｜ ${escapeHtml(st.exitReason || '离班')} ｜ 离班结余：${remain === '' ? '-' : remain + 'h'}`;
+                            return `<div class="student-archive-item">
+                                <span class="student-archive-name">${escapeHtml(st.name || '未命名宝贝')}</span>
+                                <span class="student-status-badge ${isTransfer ? 'student-status-transfer' : 'student-status-left'}">${isTransfer ? '🔄 已转班' : '📦 已离班'}</span>
+                                <span class="student-archive-meta">${meta}</span>
+                                <button class="btn-student-history" onclick="openStudentHistoryModal('${cls.id}','${st.id}')">👀 查看记录</button>
+                                ${isClassArchived ? '' : `<button class="btn-student-restore" onclick="restoreStudentInClass('${cls.id}','${st.id}')">↩ 恢复</button>`}
+                            </div>`;
+                        }).join('')}
+                    </div>
+                </details>
+            `;
+        }
+
         function confirmAddSession() {
             try {
                 const dateInput = document.getElementById('newSessionDate').value;
@@ -891,7 +1431,7 @@
         }
 
         function deleteSession(classId, sessionId) { if(confirm("确定删除这节课记录吗？")) { const cls = getClass(classId); if(cls){ cls.sessions = cls.sessions.filter(s => String(s.id) !== String(sessionId)); saveData(); } } }
-        function addStudent(id) { const cls = getClass(id); if(cls) { cls.students.push({ id: genUniqueId('st'), name: "", totalHours: 40, payments: [] }); saveData(); } }
+        function addStudent(id) { const cls = getClass(id); if(cls) { cls.students.push({ id: genUniqueId('st'), name: "", totalHours: 40, payments: [], classStatus: 'active', joinedAt: '', inactiveFromDate: '' }); saveData(); } }
         function deleteStudent(cid, sid) { if(confirm("确定删除宝贝吗？")) { const cls = getClass(cid); if(cls){ cls.students = cls.students.filter(s => String(s.id) !== String(sid)); saveData(); } } }
         function updateStudentName(cid, sid, val) { const st = getStudent(cid, sid); if(st){ st.name = val; saveData(); } }
         function updateStudentTotal(cid, sid, val) { const st = getStudent(cid, sid); if(st){ st.totalHours = parseFloat(val) || 0; saveData(); } }
@@ -980,28 +1520,44 @@
                 const cls = getClass(id);
                 if(!cls) return;
                 const name = `${cls.name}-考勤记录-${getToday()}.csv`;
+                const activeStudents = getActiveStudents(cls);
                 let classTotalSessions = cls.sessions.length;
                 let classTotalHours = cls.sessions.reduce((sum, session) => sum + (parseFloat(session.duration)||0), 0);
-                
-                let csv = "\uFEFF班级整体消耗:," + `已上 ${classTotalSessions} 次课，共消耗 ${classTotalHours} 小时` + "\n\n宝贝姓名,总课时,已消,剩余";
+
+                let csv = "\uFEFF班级整体消耗:," + `已上 ${classTotalSessions} 次课，共消耗 ${classTotalHours} 小时` + "\n\n宝贝姓名,状态,总课时,已消,剩余";
                 cls.sessions.forEach(s => csv += `,${s.date}(${s.duration}h)`);
                 csv += "\n";
-                cls.students.forEach(st => {
-                    let u = 0;
-                    cls.sessions.forEach(s => { const a = cls.attendanceData[`${st.id}_${s.id}`]; if(a==='✅出勤'||a==='❌旷课'||a==='🔄补课') u+=(parseFloat(s.duration)||0); });
-                    csv += `${st.name},${st.totalHours},${u},${st.totalHours-u}`;
-                    cls.sessions.forEach(s => csv += `,${cls.attendanceData[`${st.id}_${s.id}`]||''}`);
+                activeStudents.forEach(st => {
+                    const usage = calculateStudentUsage(cls, st);
+                    csv += `${st.name},在读,${st.totalHours},${usage.used},${roundHours(st.totalHours-usage.used)}`;
+                    cls.sessions.forEach(s => {
+                        if (!isSessionInStudentMembership(st, s)) csv += ',未加入';
+                        else csv += `,${cls.attendanceData[`${st.id}_${s.id}`]||''}`;
+                    });
                     csv += "\n";
                 });
-                
+                const archived = getArchivedStudents(cls);
+                if (archived.length) {
+                    csv += "\n已转班/已离班学生\n姓名,状态,生效日期,去向/原因,离开时结余\n";
+                    archived.forEach(st => {
+                        const rec = st.exitRecord || {};
+                        const status = st.classStatus === 'transferred' ? '已转班' : '已离班';
+                        const detail = st.classStatus === 'transferred' ? (st.exitToClassName || '') : (st.exitReason || '');
+                        csv += `${st.name},${status},${st.inactiveFromDate || ''},${detail},${rec.remainingHours ?? ''}\n`;
+                    });
+                }
+
                 const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
                 const link = document.createElement("a");
                 link.href = URL.createObjectURL(blob);
                 link.download = name;
+                document.body.appendChild(link);
                 link.click();
+                document.body.removeChild(link);
                 URL.revokeObjectURL(link.href);
-            } catch(e) { alert("导出失败，请重试！"); }
+            } catch(e) { console.error(e); alert("导出失败，请重试！"); }
         }
+
 
         function exportAllJSON() {
             try {
@@ -1145,7 +1701,7 @@
 
                     if (Array.isArray(importedClasses) && importedClasses.length && commitImportedClasses(importedClasses)) {
                         const names = classesData.slice(0, 5).map(c => c.name || '未命名班级').join('、');
-                        alert(`✅ 导入成功！已读取 ${classesData.length} 个班级。\n\n已导入：${names}${classesData.length > 5 ? '……' : ''}\n\n班级切换、一键结转、历史记录、缴费记录、CSV导出都保留。`);
+                        alert(`✅ 导入成功！已读取 ${classesData.length} 个班级。\n\n已导入：${names}${classesData.length > 5 ? '……' : ''}\n\n班级切换、一键结转、学生转班/归档、历史记录、缴费记录、CSV导出都保留。`);
                     } else {
                         alert("❌ 导入失败：没有识别到班级数据。\n\n这个版本已经支持旧版数组、带 history/archive 的备份、localStorage 整包和多层包裹 JSON。若仍失败，请把文件发我，我会继续按文件实际结构修。");
                     }
